@@ -103,6 +103,19 @@ Toàn bộ hệ thống chạy local bằng Docker Desktop và `docker compose`,
 | `prometheus` | Prometheus | Thu thập metrics |
 | `grafana` | Grafana | Dashboard, cảnh báo |
 
+**Cài đặt môi trường phát triển** (yêu cầu [uv](https://docs.astral.sh/uv/getting-started/installation/) và Git):
+
+```bash
+git clone https://github.com/quandao073/IT5414-Group7-MLOps.git
+cd IT5414-Group7-MLOps
+git switch develop
+uv sync                     # tạo .venv với Python 3.12 theo uv.lock
+uv run pre-commit install   # cài git hook (ruff, kiểm tra file)
+uv run invoke test          # chạy test kèm coverage
+```
+
+Quy trình nhánh, Pull Request và quy ước commit: xem [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## 6. Kiến trúc dự kiến
 
 ```mermaid
@@ -159,4 +172,3 @@ flowchart LR
 | Lê Vũ Hoàng Tùng | 20251239E | TBD |
 | Nguyễn Đắc Quang | 20260121E | TBD |
 | Phạm Nhật Anh | 20250729E | TBD |
-
