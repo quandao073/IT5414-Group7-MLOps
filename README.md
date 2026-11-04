@@ -69,7 +69,7 @@ Dự án được coi là thành công khi đạt được:
 - *Đánh giá offline:* 4 tháng đầu của production stream (01–04/2017) là tập test khi chọn mô hình ở môn IT3190; 05–08/2017 là phần mô hình chưa từng thấy. `uv run invoke preprocess-data` ghi ba tập `train`, `test`, `production_holdout` và schema đầu vào vào `data/processed/`.
 - *Kịch bản drift bổ sung:* train trên một khách sạn và suy luận trên khách sạn còn lại để kiểm tra độ bền của mô hình.
 
-Dữ liệu thô và dữ liệu đã xử lý được quản lý phiên bản bằng DVC. Schema dữ liệu sau xử lý được kiểm tra trong unit test.
+Dữ liệu thô được quản lý phiên bản bằng DVC; dữ liệu đã xử lý không lưu trong git hay DVC mà được tạo lại từ dữ liệu thô bằng `uv run invoke preprocess-data`. Schema dữ liệu sau xử lý được kiểm tra trong unit test.
 
 ## 4. Mô hình
 
@@ -120,6 +120,10 @@ uv run invoke test          # chạy test kèm coverage
 ```
 
 DVC remote chưa được cấu hình. Trong lúc chờ, tải `hotel_bookings.csv` từ Kaggle vào `data/raw/` thay cho `dvc pull`. Unit test chạy được cả khi chưa có dữ liệu thật: các test cần file này sẽ tự bỏ qua.
+
+Trên macOS, XGBoost và LightGBM cần OpenMP: chạy `brew install libomp` trước `uv sync`.
+
+**Trạng thái mã nguồn:** đã có `data.py` (làm sạch, chia theo thời gian, schema), `features.py`, `model.py` (`build_from_spec` dựng pipeline hoặc ensemble từ một spec dạng `configs/model/*.yaml`) và `evaluate.py` (metrics, chọn ngưỡng). `train.py`, `api.py` và `visualize.py` chưa được viết, nên `uv run invoke train` hiện chưa làm gì.
 
 Quy trình nhánh, Pull Request và quy ước commit: xem [CONTRIBUTING.md](CONTRIBUTING.md).
 
