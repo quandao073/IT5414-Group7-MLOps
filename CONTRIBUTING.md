@@ -69,11 +69,11 @@ chore: ignore AI assistant tooling directories
 
 - Python 3.12. Dependency được quản lý bằng `uv`: dùng `uv add <package>` (hoặc `uv add --dev <package>` cho công cụ phát triển). Luôn commit `pyproject.toml` cùng với `uv.lock`.
 - Lint và format bằng `ruff`; độ dài dòng tối đa 120 ký tự.
-- Mọi hàm đều có type hint; CI chạy `mypy` trên toàn repo.
+- Mọi hàm đều có type hint; CI chạy `mypy` trên toàn repo. Pre-commit không chạy `mypy`, nên chạy `uv run mypy .` trước khi push.
 - Mọi hàm và class đều có docstring theo Google style.
 - Dùng f-string để định dạng chuỗi.
 - Code mới đi kèm test trong `tests/`; chạy bằng `uv run invoke test`.
-- Không commit dữ liệu, artifact mô hình hoặc secret. Dữ liệu được quản lý bằng DVC, biến bí mật đặt trong `.env` (đã được ignore). Pre-commit chặn file lớn.
+- Không commit dữ liệu, artifact mô hình hoặc secret. Dữ liệu được quản lý bằng DVC, biến bí mật đặt trong `.env` (đã được ignore). Artifact mô hình trong `models/` và output của MLflow/Hydra đã được ignore. Pre-commit chỉ chặn file trên 500 KB, nên hãy xem lại `git status` trước khi commit.
 
 ## 4. Pre-commit
 

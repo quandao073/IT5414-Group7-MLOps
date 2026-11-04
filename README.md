@@ -60,23 +60,26 @@ Dự án được coi là thành công khi đạt được:
 - Nhãn `is_canceled`: khoảng 37% đặt phòng bị hủy.
 - Dung lượng nhỏ (dưới 20 MB), phù hợp để chạy toàn bộ pipeline trên máy cá nhân.
 
-**Xử lý rò rỉ nhãn (data leakage):** loại bỏ `reservation_status` và `reservation_status_date` vì hai cột này mã hóa trực tiếp kết quả hủy. Các cột có thể thay đổi sau thời điểm đặt (`assigned_room_type`, `booking_changes`, `days_in_waiting_list`) sẽ được đánh giá lại để phù hợp với kịch bản "dự báo tại thời điểm đặt phòng".
+**Xử lý rò rỉ nhãn (data leakage):** loại bỏ `reservation_status` và `reservation_status_date` vì hai cột này mã hóa trực tiếp kết quả hủy. Các cột chỉ biết sau thời điểm đặt (`assigned_room_type`, `booking_changes`, `required_car_parking_spaces`, `country`) được giữ trong dữ liệu để phân tích nhưng không làm đầu vào mô hình. Mô hình nhận 25 cột gốc biết được lúc đặt phòng cộng `rooms_in_booking` (danh sách ở `src/hotel_booking/config.py`).
 
 **Chia dữ liệu theo thời gian để mô phỏng production:**
 
 - *Reference / train–validation:* các đặt phòng có ngày đến từ 07/2015 đến 12/2016.
 - *Production stream:* 01/2017 đến 08/2017, được "phát lại" theo từng tháng vào API để kiểm tra drift. Nhãn của mỗi tháng chỉ được mở sau khi tháng đó phát lại xong (mô phỏng độ trễ của nhãn) và được dùng để retrain.
+- *Đánh giá offline:* 4 tháng đầu của production stream (01–04/2017) là tập test khi chọn mô hình ở môn IT3190; 05–08/2017 là phần mô hình chưa từng thấy. `uv run invoke preprocess-data` ghi ba tập `train`, `test`, `production_holdout` và schema đầu vào vào `data/processed/`.
 - *Kịch bản drift bổ sung:* train trên một khách sạn và suy luận trên khách sạn còn lại để kiểm tra độ bền của mô hình.
 
-Dữ liệu thô và dữ liệu đã xử lý được quản lý phiên bản bằng DVC. Schema dữ liệu sau xử lý được kiểm tra trong unit test.
+Dữ liệu thô được quản lý phiên bản bằng DVC; dữ liệu đã xử lý không lưu trong git hay DVC mà được tạo lại từ dữ liệu thô bằng `uv run invoke preprocess-data`. Schema dữ liệu sau xử lý được kiểm tra trong unit test.
 
 ## 4. Mô hình
 
 | Vai trò | Mô hình | Ghi chú |
 |---|---|---|
-| Baseline | Logistic Regression | Mốc so sánh, dùng chung pipeline tiền xử lý |
-| Mô hình chính | TBD | Estimator tương thích scikit-learn, chọn theo kết quả đánh giá |
+| Baseline | Logistic Regression | Mốc so sánh, dùng chung pipeline tiền xử lý (`configs/model/logistic_regression.yaml`) |
+| Mô hình chính | Ensemble Random Forest + XGBoost + LightGBM | Chọn ở môn IT3190 theo CV theo quý 2016 (`configs/model/champion.yaml`) |
 | Thử nghiệm (tùy chọn) | PyTorch Tabular | So sánh với mô hình chính trên MLflow |
+
+Pipeline mô hình nhận bản ghi gốc: `BookingFeatureBuilder` tạo đặc trưng → `ColumnTransformer` (impute, one-hot) → estimator; mỗi thành viên ensemble được train với trọng số ưu tiên dữ liệu gần đây. Kết quả tham chiếu của champion ở IT3190 nằm trong `reports/it3190_model_card.json`: CV ROC-AUC 0,858; trên test 01–04/2017 ROC-AUC 0,865, PR-AUC 0,824, F1 0,689 tại ngưỡng 0,456.
 
 **Chỉ số đánh giá:**
 
@@ -111,8 +114,16 @@ cd IT5414-Group7-MLOps
 git switch develop
 uv sync                     # tạo .venv với Python 3.12 theo uv.lock
 uv run pre-commit install   # cài git hook (ruff, kiểm tra file)
+uv run dvc pull             # tải data/raw/hotel_bookings.csv
+uv run invoke preprocess-data
 uv run invoke test          # chạy test kèm coverage
 ```
+
+DVC remote chưa được cấu hình. Trong lúc chờ, tải `hotel_bookings.csv` từ Kaggle vào `data/raw/` thay cho `dvc pull`. Unit test chạy được cả khi chưa có dữ liệu thật: các test cần file này sẽ tự bỏ qua.
+
+Trên macOS, XGBoost và LightGBM cần OpenMP: chạy `brew install libomp` trước `uv sync`.
+
+**Trạng thái mã nguồn:** đã có `data.py` (làm sạch, chia theo thời gian, schema), `features.py`, `model.py` (`build_from_spec` dựng pipeline hoặc ensemble từ một spec dạng `configs/model/*.yaml`) và `evaluate.py` (metrics, chọn ngưỡng). `train.py`, `api.py` và `visualize.py` chưa được viết, nên `uv run invoke train` hiện chưa làm gì.
 
 Quy trình nhánh, Pull Request và quy ước commit: xem [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -172,3 +183,5 @@ flowchart LR
 | Lê Vũ Hoàng Tùng | 20251239E | TBD |
 | Nguyễn Đắc Quang | 20260121E | TBD |
 | Phạm Nhật Anh | 20250729E | TBD |
+| Bùi Trung Đức | 20251089E | TBD |
+
