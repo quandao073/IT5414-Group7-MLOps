@@ -13,6 +13,8 @@
     * To lint code, use `uv run ruff check . --fix`.
 * The project uses `invoke` for task management. To see available tasks, use `uv run invoke --list` or refer to the
     `tasks.py` file.
+* The project uses `dvc` to version data. The raw dataset is tracked by `data/raw/hotel_bookings.csv.dvc`;
+    fetch it with `uv run dvc pull` and never commit files under `data/` to git.
 * The project uses `pre-commit` for managing pre-commit hooks. To run all hooks on all files, use
     `uv run pre-commit run --all-files`. For more information, refer to the `.pre-commit-config.yaml` file.
 
