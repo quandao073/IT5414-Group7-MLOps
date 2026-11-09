@@ -20,7 +20,7 @@
 | C4 | [Dữ liệu replay và nhãn trễ](#c4-du-lieu-replay) | Đề xuất, đã có code | Data, Drift |
 | C5 | [Biến môi trường](#c5-bien-moi-truong) | Đề xuất | Platform |
 | C6 | MLflow Registry | Sẽ bổ sung | Training |
-| C7 | Endpoint `/reload` | Sẽ bổ sung | Training (DAG retrain) |
+| C7 | [Endpoint `/reload`](#c7-endpoint-reload) | Đề xuất, đã có code | Training (DAG retrain) |
 | C8 | Backend ONNX | Sẽ bổ sung | Load test |
 | C9 | [Bảng log dự đoán và nhãn](#c9-bang-log-du-doan-va-nhan) | Đề xuất, SQL đã chạy thử, API chưa ghi | Drift, Training, Platform |
 | C10 | [Metrics Prometheus](#c10-metrics-prometheus) | Đề xuất, đã có code | Platform |
@@ -86,6 +86,11 @@ Trường của model card mà API đọc:
 | `model_version` | chuỗi | Trả về trong mọi response, ghi log |
 | `decision_threshold` | số | Quyết định `is_canceled` |
 | `input_schema` | object, kết quả `data.build_input_schema(train)` | Sinh `warnings` |
+| `artifact_sha256` | chuỗi hex, không bắt buộc | Khi có, API chỉ nạp `model.joblib` có SHA-256 trùng giá trị này |
+
+Khi thay mô hình đang chạy, ghi file mới dưới tên tạm rồi đổi tên (như `sample_model.save_artifacts`): ghi
+`model.joblib.tmp` và `model_card.json.tmp` (card chứa `artifact_sha256` của file model mới), đổi tên model trước,
+card sau. Nếu `/reload` chạy đúng lúc giữa hai lần đổi tên, checksum không khớp nên API giữ mô hình cũ; gọi lại là xong.
 
 Các trường khác (`model_name`, `created_at`, `model_spec`, `test_metrics`, `data`, `environment`...) giữ như model
 card IT3190 để tra cứu.
@@ -136,8 +141,10 @@ Danh sách đầy đủ trong `.env.example` ở gốc repo. Bí mật (mật kh
 
 | Biến | Mặc định | Dùng bởi |
 |---|---|---|
+| `MODEL_SOURCE` | `file` (hiện chỉ có giá trị này; `mlflow` sẽ thêm ở C6) | API |
 | `MODEL_PATH` | `models/model.joblib` (trong container: `/app/models/model.joblib`) | API |
 | `MODEL_CARD_PATH` | `models/model_card.json` (trong container: `/app/models/model_card.json`) | API |
+| `RELOAD_TOKEN` | trống: `/reload` không cần token | API, DAG retrain (bí mật, đặt trong `.env`) |
 | `API_URL` | `http://localhost:8000` | Replay, Frontend, load test |
 | `MLFLOW_TRACKING_URI` | `https://dagshub.com/quandao073/IT5414-Group7-MLOps.mlflow`; MLflow tự host: `http://localhost:5000` (trong compose: `http://mlflow:5000`) | Training, API (Registry) |
 | `MLFLOW_TRACKING_USERNAME` | Tên tài khoản DagsHub của mỗi người | Training, API (Registry) |
@@ -149,6 +156,30 @@ Danh sách đầy đủ trong `.env.example` ở gốc repo. Bí mật (mật kh
 | `REFERENCE_DIR` | `data/processed` (trong container: `/app/data/processed`) | Drift service |
 | `DRIFT_MIN_ROWS` | `100` | Drift service |
 | `DRIFT_SERVICE_URL` | `http://drift:8001` | DAG `monitor_drift` |
+
+## C7. Endpoint `/reload`
+
+Nạp lại mô hình từ nguồn hiện tại (`MODEL_SOURCE`, C5) mà không khởi động lại container. Dùng ở cuối DAG retrain, sau
+khi mô hình mới đã được ghi ra (C2) hoặc được gán alias `champion` (C6).
+
+| Mục | Quy ước |
+|---|---|
+| Request | `POST /reload`, không có body. Nếu API đặt `RELOAD_TOKEN` thì gửi header `X-Reload-Token: <token>` |
+| `200` | `{"previous_version": str \| null, "current_version": str, "changed": bool, "reloaded_at": "<ISO 8601 UTC>"}` |
+| `401` | Thiếu hoặc sai `X-Reload-Token` |
+| `503` | Không nạp được (thiếu file, sai checksum, card hỏng): **mô hình cũ vẫn được phục vụ**, `detail` ghi lý do |
+
+- Request đang xử lý dùng trọn mô hình lúc bắt đầu; request đến sau khi `/reload` trả về dùng mô hình mới.
+- Hai lần `/reload` cùng lúc chạy lần lượt.
+- `changed: false` nghĩa là nguồn vẫn chứa đúng phiên bản đang chạy (ví dụ challenger không được promote).
+- Kết quả được đếm trong `api_model_reloads_total{result}` (C10) và `api_model_info` đổi sang phiên bản mới.
+
+Cách DAG kiểm tra: gọi `/reload`, kiểm tra mã `200` và `current_version` bằng phiên bản vừa promote; sau đó
+`GET /health` cũng phải trả `model_version` đó. Ví dụ: `docs/examples/reload.http`.
+
+```bash
+curl -X POST http://localhost:8000/reload -H "X-Reload-Token: $RELOAD_TOKEN"
+```
 
 ## C9. Bảng log dự đoán và nhãn
 
@@ -214,6 +245,7 @@ API expose metrics ở `GET /metrics` (định dạng text của Prometheus, kh�
 | `api_predictions_total` | counter | `outcome` | Số bản ghi theo quyết định: `canceled`, `not_canceled` |
 | `api_input_warnings_total` | counter | `column`, `issue` | Số bản ghi có giá trị chưa gặp trong train (như `warnings` của C1) |
 | `api_model_info` | gauge | `model_version`, `backend` | Bằng 1 cho mô hình đang phục vụ; không có dòng nào khi chưa nạp mô hình |
+| `api_model_reloads_total` | counter | `result` | Số lần gọi `/reload`: `success`, `failure` (C7) |
 
 - `endpoint` là mẫu đường dẫn của route (`/predict`, `/predict/batch`...); đường dẫn không tồn tại gộp thành
   `unmatched`, nên số giá trị label không tăng vô hạn.
