@@ -1,0 +1,8 @@
+# Scrape job for the prediction API (contract C10 in docs/source/contracts.md).
+# Add under `scrape_configs:` in monitoring/prometheus/prometheus.yml.
+# Inside docker compose the target is the service name; outside, use localhost:8000.
+- job_name: api
+  scrape_interval: 15s
+  metrics_path: /metrics
+  static_configs:
+    - targets: ["api:8000"]

@@ -18,6 +18,7 @@ from fastapi import FastAPI, HTTPException, Request
 
 from hotel_booking.config import GROUP_SIZE_COLUMN, MODEL_INPUT_COLUMNS
 from hotel_booking.data import add_group_size, validate_inputs
+from hotel_booking.monitoring import ApiMetrics, instrument
 from hotel_booking.sample_model import CARD_FILE, MODEL_FILE
 from hotel_booking.schemas import (
     BatchRequest,
@@ -125,6 +126,7 @@ def create_app(model_path: Path | None = None, card_path: Path | None = None) ->
         app.state.served = None
         if model_file.exists() and card_file.exists():
             app.state.served = load_served_model(model_file, card_file)
+        metrics.set_model(app.state.served.version if app.state.served else None)
         yield
 
     app = FastAPI(
@@ -133,6 +135,9 @@ def create_app(model_path: Path | None = None, card_path: Path | None = None) ->
         version="0.1.0",
         lifespan=lifespan,
     )
+    metrics = ApiMetrics()
+    app.state.metrics = metrics
+    instrument(app, metrics)
 
     def served_model(request: Request) -> ServedModel:
         served: ServedModel | None = request.app.state.served
@@ -154,12 +159,15 @@ def create_app(model_path: Path | None = None, card_path: Path | None = None) ->
         served = served_model(request)
         frame = bookings_to_frame([booking])
         probability = float(served.predict(frame)[0])
+        warnings = input_warnings(frame, served.schema)
+        metrics.observe_predictions([probability], served.threshold)
+        metrics.observe_warnings(warnings)
         return PredictResponse(
             probability=probability,
             is_canceled=probability >= served.threshold,
             threshold=served.threshold,
             model_version=served.version,
-            warnings=input_warnings(frame, served.schema),
+            warnings=warnings,
         )
 
     @app.post("/predict/batch", response_model=BatchResponse)
@@ -167,15 +175,17 @@ def create_app(model_path: Path | None = None, card_path: Path | None = None) ->
         """Predict the cancellation probabilities of several bookings, in request order."""
         served = served_model(request)
         frame = bookings_to_frame(batch.bookings)
-        probabilities = served.predict(frame)
+        probabilities = [float(value) for value in served.predict(frame)]
+        warnings = input_warnings(frame, served.schema)
+        metrics.observe_predictions(probabilities, served.threshold)
+        metrics.observe_warnings(warnings)
         return BatchResponse(
             predictions=[
-                Prediction(probability=float(value), is_canceled=bool(value >= served.threshold))
-                for value in probabilities
+                Prediction(probability=value, is_canceled=value >= served.threshold) for value in probabilities
             ],
             threshold=served.threshold,
             model_version=served.version,
-            warnings=input_warnings(frame, served.schema),
+            warnings=warnings,
         )
 
     return app
