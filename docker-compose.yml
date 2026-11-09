@@ -39,8 +39,12 @@ services:
       context: .
       dockerfile: dockerfiles/api.dockerfile
     ports: ["8000:8000"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mlops}:${POSTGRES_PASSWORD:-mlops}@postgres:5432/hotel
     volumes:
       - ./models:/app/models:ro
+    depends_on:
+      postgres: {condition: service_healthy}
     restart: unless-stopped
 
   # Streamlit frontend (1.4.3); it calls the API over the compose network.

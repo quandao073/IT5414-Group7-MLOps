@@ -5,6 +5,7 @@ between a prediction and knowing whether the booking was canceled.
 """
 
 import json
+import os
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,9 +14,11 @@ from typing import Any
 import httpx
 import pandas as pd
 import typer
+from sqlalchemy import Engine
 
 from hotel_booking.config import ID_COLUMN, MODEL_INPUT_COLUMNS, TARGET, TIME_COLUMN
 from hotel_booking.data import read_split
+from hotel_booking.prediction_log import connect, write_labels
 
 STREAM_SPLITS = ("test", "production_holdout")
 LABEL_COLUMNS = [ID_COLUMN, TARGET]
@@ -68,7 +71,9 @@ def list_batches(stream_dir: Path, months: list[str] | None = None) -> list[Path
 
 
 def to_records(frame: pd.DataFrame) -> list[dict[str, Any]]:
-    """Model input columns as JSON-ready records, with missing values as `None`.
+    """Model input columns and the booking id as JSON-ready records, with missing values as `None`.
+
+    The booking id is only written to the prediction log, to join the label released later (contract C9).
 
     Args:
         frame: Bookings.
@@ -76,7 +81,7 @@ def to_records(frame: pd.DataFrame) -> list[dict[str, Any]]:
     Returns:
         One dict per booking.
     """
-    records: list[dict[str, Any]] = json.loads(frame[MODEL_INPUT_COLUMNS].to_json(orient="records"))
+    records: list[dict[str, Any]] = json.loads(frame[MODEL_INPUT_COLUMNS + [ID_COLUMN]].to_json(orient="records"))
     return records
 
 
@@ -99,7 +104,12 @@ def release_labels(batch: pd.DataFrame, month: str, labels_dir: Path) -> Path:
 
 
 def replay_month(
-    client: httpx.Client, batch_file: Path, labels_dir: Path, batch_size: int, delay: float
+    client: httpx.Client,
+    batch_file: Path,
+    labels_dir: Path,
+    batch_size: int,
+    delay: float,
+    engine: Engine | None = None,
 ) -> dict[str, Any]:
     """Send one month to `POST /predict/batch`, then release its labels.
 
@@ -109,9 +119,10 @@ def replay_month(
         labels_dir: Folder for the label files.
         batch_size: Bookings per request.
         delay: Seconds to wait between requests.
+        engine: Database of the `labels` table (contract C9); labels are also written there when given.
 
     Returns:
-        Summary of the month: rows, requests, mean probability, model versions seen and label file.
+        Summary of the month: rows, requests, mean probability, model versions seen and where the labels went.
     """
     batch = read_split(batch_file.parent, batch_file.stem)
     probabilities: list[float] = []
@@ -121,13 +132,16 @@ def replay_month(
         if requests and delay:
             time.sleep(delay)
         chunk = batch.iloc[start : start + batch_size]
-        response = client.post("/predict/batch", json={"bookings": to_records(chunk)})
+        response = client.post(
+            "/predict/batch", json={"bookings": to_records(chunk)}, headers={"X-Replay-Month": batch_file.stem}
+        )
         response.raise_for_status()
         body = response.json()
         probabilities += [item["probability"] for item in body["predictions"]]
         versions.add(body["model_version"])
         requests += 1
     labels = release_labels(batch, batch_file.stem, labels_dir)
+    labels_in_db = write_labels(engine, batch, batch_file.stem, ID_COLUMN, TARGET) if engine is not None else 0
     return {
         "month": batch_file.stem,
         "rows": len(batch),
@@ -135,6 +149,7 @@ def replay_month(
         "mean_probability": round(sum(probabilities) / max(len(probabilities), 1), 4),
         "model_versions": sorted(versions),
         "labels": str(labels),
+        "labels_in_db": labels_in_db,
     }
 
 
@@ -145,6 +160,7 @@ def main(
     months: str = "",
     batch_size: int = 200,
     delay: float = 0.0,
+    database_url: str = "",
 ) -> None:
     """Replay the 2017 stream into the API month by month.
 
@@ -155,15 +171,20 @@ def main(
         months: Comma-separated months to replay, e.g. `2017-01,2017-02`; all months when empty.
         batch_size: Bookings per request.
         delay: Seconds to wait between requests, to control the replay speed.
+        database_url: Database for the `labels` table; defaults to `DATABASE_URL`, and labels only go to files
+            when neither is set.
     """
     selected = [month.strip() for month in months.split(",") if month.strip()] or None
     batches = list_batches(stream_dir, selected)
     if not batches:
         build_stream(processed_dir, stream_dir)
         batches = list_batches(stream_dir, selected)
+    url = database_url or os.getenv("DATABASE_URL")
+    engine = connect(url) if url else None
     with httpx.Client(base_url=api_url, timeout=60) as client:
         for batch_file in batches:
-            print(json.dumps(replay_month(client, batch_file, stream_dir / LABELS_DIR, batch_size, delay)))
+            summary = replay_month(client, batch_file, stream_dir / LABELS_DIR, batch_size, delay, engine)
+            print(json.dumps(summary))
 
 
 if __name__ == "__main__":

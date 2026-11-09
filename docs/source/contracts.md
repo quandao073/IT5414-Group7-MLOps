@@ -22,12 +22,12 @@
 | C6 | MLflow Registry | Sẽ bổ sung | Training |
 | C7 | [Endpoint `/reload`](#c7-endpoint-reload) | Đề xuất, đã có code | Training (DAG retrain) |
 | C8 | [Backend ONNX](#c8-backend-onnx) | Đề xuất, đã có code | Load test, Platform |
-| C9 | [Bảng log dự đoán và nhãn](#c9-bang-log-du-doan-va-nhan) | Đề xuất, SQL đã chạy thử, API chưa ghi | Drift, Training, Platform |
+| C9 | [Bảng log dự đoán và nhãn](#c9-bang-log-du-doan-va-nhan) | Đề xuất, đã có code, chạy thử trên PostgreSQL 16 | Drift, Training, Platform |
 | C10 | [Metrics Prometheus](#c10-metrics-prometheus) | Đề xuất, đã có code | Platform |
 | C11 | [Service trong docker compose](#c11-docker-compose) | Đề xuất, đã có `docker-compose.yml` | Platform, cả nhóm |
 | C12 | [Docker image](#c12-docker) | Đề xuất, đã có Dockerfile | Platform, Training |
 | C13 | Checklist demo | Sẽ bổ sung | Cả nhóm |
-| C14 | [Drift service và DAG `monitor_drift`](#c14-drift-service) | Đề xuất, đã có code, chờ API ghi log (C9) | Platform (compose, Grafana), Training (DAG `retrain`) |
+| C14 | [Drift service và DAG `monitor_drift`](#c14-drift-service) | Đề xuất, đã có code; API ghi log từ C9 | Platform (compose, Grafana), Training (DAG `retrain`) |
 
 ## C1. API
 
@@ -35,13 +35,19 @@ Base URL khi chạy local: `http://localhost:8000`. Swagger UI: `/docs`. Schema 
 
 | Method | Đường dẫn | Body | Response |
 |---|---|---|---|
-| `GET` | `/health` | – | `{"status": "ok", "model_loaded": bool, "model_version": str \| null}` |
+| `GET` | `/health` | – | `{"status": "ok", "model_loaded": bool, "model_version": str \| null, "prediction_logging": bool}` |
 | `POST` | `/predict` | Một `Booking` | `{"probability", "is_canceled", "threshold", "model_version", "warnings"}` |
 | `POST` | `/predict/batch` | `{"bookings": [Booking, ...]}` (1 – 10 000 bản ghi) | `{"predictions": [{"probability", "is_canceled"}], "threshold", "model_version", "warnings"}` |
 
 **`Booking`** gồm đúng các cột `config.MODEL_INPUT_COLUMNS`: 25 cột thô biết được lúc đặt phòng và
 `rooms_in_booking`. Không gửi các cột leakage (`reservation_status`, `reservation_status_date`) hay các cột chỉ biết
 sau khi đặt (`assigned_room_type`, `booking_changes`, `required_car_parking_spaces`, `country`); trường lạ bị từ chối.
+
+Ngoài ra, chỉ để ghi log (C9), không đưa vào mô hình:
+
+- trường không bắt buộc `booking_id` (số nguyên) trong mỗi `Booking`, để nối với nhãn về sau;
+- header không bắt buộc `X-Replay-Month: YYYY-MM` của `/predict` và `/predict/batch`, replay luôn gửi (sai định dạng
+  trả `422`).
 
 | Nhóm | Cột | Kiểu |
 |---|---|---|
@@ -126,7 +132,8 @@ Replay mô phỏng production bằng các đặt phòng có ngày đến năm 20
 | Batch theo tháng | `data/stream/YYYY-MM.csv` (`2017-01` … `2017-08`), cùng cột với `data/processed/test.csv`, có `booking_id`, `arrival_date`, `is_canceled`. Thư mục này đã được `.gitignore` bỏ qua |
 | Tạo batch | `replay.py` tự tạo từ `data/processed/` nếu thư mục chưa có batch; file đã có thì giữ nguyên, nên Data có thể tự sinh batch thay thế miễn đúng tên file và cột |
 | Gửi | Mỗi tháng gửi lần lượt vào `POST /predict/batch`, cấu hình `--batch-size` (mặc định 200) và `--delay` (giây giữa hai request) |
-| Nhãn trễ | Nhãn của tháng M chỉ được ghi **sau khi** đã gửi xong tháng M, vào `data/stream/labels/YYYY-MM.csv` với cột `booking_id`, `is_canceled`, `month`, `released_at`. Khi có PostgreSQL, nhãn chuyển sang bảng `labels` (C9) |
+| Nhãn trễ | Nhãn của tháng M chỉ được ghi **sau khi** đã gửi xong tháng M, vào `data/stream/labels/YYYY-MM.csv` với cột `booking_id`, `is_canceled`, `month`, `released_at`; khi có `DATABASE_URL` (hoặc `--database-url`) thì ghi thêm vào bảng `labels` (C9), chạy lại thì cập nhật chứ không nhân đôi |
+| Định danh | Mỗi bản ghi gửi kèm `booking_id`, mỗi request kèm header `X-Replay-Month` (C1), nên log nối được với nhãn |
 
 Ví dụ batch: `docs/examples/stream_sample.csv` (20 dòng dữ liệu **giả**, chỉ để xem cột).
 
@@ -153,7 +160,7 @@ Danh sách đầy đủ trong `.env.example` ở gốc repo. Bí mật (mật kh
 | `POSTGRES_USER`, `POSTGRES_PASSWORD` | `mlops`, `mlops` (chỉ dùng local) | docker compose: PostgreSQL, MLflow, Airflow |
 | `S3_ACCESS_KEY`, `S3_SECRET_KEY` | `mlops`, `mlops-secret` (chỉ dùng local) | docker compose: SeaweedFS, MLflow; DVC remote `local` |
 | `AIRFLOW_JWT_SECRET` | `local-only-jwt-secret` (chỉ dùng local) | docker compose: các service Airflow |
-| `DATABASE_URL` | Không có (không ghi/đọc log) | API (ghi log, C9), Drift service (đọc log, C14) |
+| `DATABASE_URL` | Không có (không ghi/đọc log). Trong compose: `postgresql+psycopg://mlops:mlops@postgres:5432/hotel` | API (ghi log, C9), replay (ghi nhãn, C4), Drift service (đọc log, C14) |
 | `REFERENCE_DIR` | `data/processed` (trong container: `/app/data/processed`) | Drift service |
 | `DRIFT_MIN_ROWS` | `100` | Drift service |
 | `DRIFT_SERVICE_URL` | `http://drift:8001` | DAG `monitor_drift` |
@@ -217,8 +224,13 @@ MODEL_BACKEND=onnx uv run invoke serve-api
 ## C9. Bảng log dự đoán và nhãn
 
 PostgreSQL. DDL: `docs/examples/sql/schema.sql`, truy vấn mẫu: `docs/examples/sql/queries.sql` (đã chạy thử trên
-PostgreSQL 16). API sẽ chạy DDL lúc khởi động (`CREATE TABLE IF NOT EXISTS`), nên không cần migration riêng; ai cũng
-có thể chạy lại file này mà không mất dữ liệu.
+PostgreSQL 16). Khi có `DATABASE_URL`, API tạo các bảng còn thiếu lúc khởi động (bảng SQLAlchemy trong
+`src/hotel_booking/prediction_log.py`, cùng cột với `schema.sql`, test kiểm tra hai bên khớp), nên không cần migration
+riêng; `schema.sql` chạy lại cũng không mất dữ liệu.
+
+Ghi log chạy trong background task sau khi đã trả response, nên không làm chậm request. Ghi lỗi (DB mất kết nối,
+bảng bị xóa) chỉ ghi cảnh báo và tăng `api_prediction_log_errors_total` (C10), request vẫn thành công. Không mở được
+DB lúc khởi động thì API vẫn chạy, `/health` báo `prediction_logging: false`.
 
 **`prediction_logs`**: mỗi bản ghi được chấm là một dòng; một request batch ghi nhiều dòng cùng `request_id`.
 
@@ -257,9 +269,8 @@ có thể chạy lại file này mà không mất dữ liệu.
 4. Dữ liệu có nhãn để retrain: bản ghi mới nhất của mỗi `booking_id` đã có nhãn.
 5. Số request có cảnh báo đầu vào, theo tháng và cột.
 
-**Thay đổi đi kèm ở C1** (sẽ làm cùng việc ghi log, chỉ thêm, không phá request hiện tại): mỗi `Booking` nhận thêm
-trường không bắt buộc `booking_id`, và request có thể kèm header `X-Replay-Month: YYYY-MM`. Hai giá trị này chỉ ghi
-vào log, không đưa vào mô hình.
+`booking_id` và `replay_month` lấy từ trường `booking_id` và header `X-Replay-Month` của request (C1); hai giá trị này
+không đưa vào mô hình.
 
 Kết nối: biến môi trường `DATABASE_URL` (ví dụ `postgresql+psycopg://user:password@postgres:5432/hotel`). Không
 có `DATABASE_URL` thì API vẫn chạy, chỉ không ghi log.
@@ -279,6 +290,7 @@ API expose metrics ở `GET /metrics` (định dạng text của Prometheus, kh�
 | `api_input_warnings_total` | counter | `column`, `issue` | Số bản ghi có giá trị chưa gặp trong train (như `warnings` của C1) |
 | `api_model_info` | gauge | `model_version`, `backend` | Bằng 1 cho mô hình đang phục vụ; không có dòng nào khi chưa nạp mô hình |
 | `api_model_reloads_total` | counter | `result` | Số lần gọi `/reload`: `success`, `failure` (C7) |
+| `api_prediction_log_errors_total` | counter | – | Số lần ghi log dự đoán thất bại (C9) |
 
 - `endpoint` là mẫu đường dẫn của route (`/predict`, `/predict/batch`...); đường dẫn không tồn tại gộp thành
   `unmatched`, nên số giá trị label không tăng vô hạn.

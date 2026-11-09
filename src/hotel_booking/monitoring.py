@@ -77,6 +77,9 @@ class ApiMetrics:
         self.reloads = Counter(
             "api_model_reloads", "Calls to POST /reload by result.", ["result"], registry=self.registry
         )
+        self.log_errors = Counter(
+            "api_prediction_log_errors", "Failed writes to the prediction log database.", registry=self.registry
+        )
 
     def set_model(self, version: str | None, backend: str = "joblib") -> None:
         """Mark which model is served; clears the previous one.

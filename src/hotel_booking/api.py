@@ -1,4 +1,4 @@
-"""Prediction API (contracts C1, C7 and C10 in `docs/source/contracts.md`).
+"""Prediction API (contracts C1, C7, C9 and C10 in `docs/source/contracts.md`).
 
 Run locally with `uv run invoke serve-api` and open http://localhost:8000/docs.
 """
@@ -7,20 +7,24 @@ import logging
 import os
 import secrets
 import threading
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 import pandas as pd
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
 
 from hotel_booking.config import GROUP_SIZE_COLUMN, MODEL_INPUT_COLUMNS
 from hotel_booking.data import add_group_size, validate_inputs
 from hotel_booking.loader import ModelLoadError, ModelSource, ServedModel, source_from_env
 from hotel_booking.monitoring import ApiMetrics, instrument
+from hotel_booking.prediction_log import PredictionLog, PredictionRecord, connect
 from hotel_booking.schemas import (
+    LOG_ONLY_FIELDS,
+    REPLAY_MONTH_PATTERN,
     BatchRequest,
     BatchResponse,
     Booking,
@@ -30,6 +34,10 @@ from hotel_booking.schemas import (
     PredictResponse,
     ReloadResponse,
 )
+
+ReplayMonth = Annotated[
+    str | None, Header(pattern=REPLAY_MONTH_PATTERN, description="Replayed month `YYYY-MM`, only for the log.")
+]
 
 NULLABLE_FLOATS = ["children", "agent", "company"]
 logger = logging.getLogger(__name__)
@@ -47,7 +55,7 @@ def bookings_to_frame(bookings: list[Booking]) -> pd.DataFrame:
     Returns:
         A frame with the columns in `MODEL_INPUT_COLUMNS`.
     """
-    frame = pd.DataFrame([booking.model_dump() for booking in bookings])
+    frame = pd.DataFrame([booking.model_dump(exclude=LOG_ONLY_FIELDS) for booking in bookings])
     frame[NULLABLE_FLOATS] = frame[NULLABLE_FLOATS].astype("float64")
     missing = frame[GROUP_SIZE_COLUMN].isna()
     if missing.any():
@@ -75,6 +83,7 @@ def create_app(
     card_path: Path | None = None,
     source: ModelSource | None = None,
     reload_token: str | None = None,
+    database_url: str | None = None,
 ) -> FastAPI:
     """Build the API.
 
@@ -84,11 +93,53 @@ def create_app(
         source: Model source; overrides `model_path` and `card_path`.
         reload_token: Secret required in the `X-Reload-Token` header of `POST /reload`; defaults to the
             `RELOAD_TOKEN` environment variable. An empty value, or neither being set, leaves `/reload` open.
+        database_url: Database for the prediction log; defaults to `DATABASE_URL`. An empty value, or neither
+            being set, disables the log.
 
     Returns:
         The FastAPI application.
     """
     reload_lock = threading.Lock()
+
+    def open_log(app: FastAPI) -> None:
+        app.state.prediction_log = None
+        url = (database_url if database_url is not None else os.getenv("DATABASE_URL")) or None
+        if url is None:
+            return
+        try:
+            app.state.prediction_log = PredictionLog(connect(url), on_error=lambda _: metrics.log_errors.inc())
+            logger.info("Writing predictions to %s", url.split("@")[-1])
+        except Exception as error:
+            metrics.log_errors.inc()
+            logger.warning("Prediction log disabled, cannot open the database: %s", error)
+
+    def log_request(
+        request: Request,
+        background: BackgroundTasks,
+        served: ServedModel,
+        frame: pd.DataFrame,
+        probabilities: list[float],
+        bookings: list[Booking],
+        replay_month: str | None,
+        warnings: list[InputWarning],
+        started: float,
+    ) -> None:
+        prediction_log: PredictionLog | None = request.app.state.prediction_log
+        if prediction_log is None:
+            return
+        record = PredictionRecord(
+            endpoint=request.url.path,
+            model_version=served.version,
+            backend=served.backend,
+            threshold=served.threshold,
+            latency_ms=(time.perf_counter() - started) * 1000,
+            inputs=frame,
+            probabilities=probabilities,
+            booking_ids=[booking.booking_id for booking in bookings],
+            replay_month=replay_month,
+            warnings=[warning.model_dump() for warning in warnings],
+        )
+        background.add_task(prediction_log.write, record)
 
     def swap_model(app: FastAPI) -> ServedModel:
         served = model_source.load()
@@ -105,7 +156,10 @@ def create_app(
             logger.info("Serving model %s from %s", served.version, model_source.describe())
         except ModelLoadError as error:
             logger.warning("Starting without a model: %s", error)
+        open_log(app)
         yield
+        if app.state.prediction_log is not None:
+            app.state.prediction_log.engine.dispose()
 
     model_source = source or source_from_env(model_path, card_path)
     token = (reload_token if reload_token is not None else os.getenv("RELOAD_TOKEN")) or None
@@ -130,18 +184,25 @@ def create_app(
         """Report whether a model is loaded and which version."""
         served: ServedModel | None = request.app.state.served
         return HealthResponse(
-            status="ok", model_loaded=served is not None, model_version=served.version if served else None
+            status="ok",
+            model_loaded=served is not None,
+            model_version=served.version if served else None,
+            prediction_logging=request.app.state.prediction_log is not None,
         )
 
     @app.post("/predict", response_model=PredictResponse)
-    def predict(booking: Booking, request: Request) -> PredictResponse:
+    def predict(
+        booking: Booking, request: Request, background: BackgroundTasks, x_replay_month: ReplayMonth = None
+    ) -> PredictResponse:
         """Predict the cancellation probability of one booking."""
+        started = time.perf_counter()
         served = served_model(request)
         frame = bookings_to_frame([booking])
         probability = float(served.predict(frame)[0])
         warnings = input_warnings(frame, served.schema)
         metrics.observe_predictions([probability], served.threshold)
         metrics.observe_warnings(warnings)
+        log_request(request, background, served, frame, [probability], [booking], x_replay_month, warnings, started)
         return PredictResponse(
             probability=probability,
             is_canceled=probability >= served.threshold,
@@ -151,14 +212,20 @@ def create_app(
         )
 
     @app.post("/predict/batch", response_model=BatchResponse)
-    def predict_batch(batch: BatchRequest, request: Request) -> BatchResponse:
+    def predict_batch(
+        batch: BatchRequest, request: Request, background: BackgroundTasks, x_replay_month: ReplayMonth = None
+    ) -> BatchResponse:
         """Predict the cancellation probabilities of several bookings, in request order."""
+        started = time.perf_counter()
         served = served_model(request)
         frame = bookings_to_frame(batch.bookings)
         probabilities = [float(value) for value in served.predict(frame)]
         warnings = input_warnings(frame, served.schema)
         metrics.observe_predictions(probabilities, served.threshold)
         metrics.observe_warnings(warnings)
+        log_request(
+            request, background, served, frame, probabilities, batch.bookings, x_replay_month, warnings, started
+        )
         return BatchResponse(
             predictions=[
                 Prediction(probability=value, is_canceled=value >= served.threshold) for value in probabilities
