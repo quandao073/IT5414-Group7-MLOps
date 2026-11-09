@@ -17,6 +17,12 @@
     fetch it with `uv run dvc pull` and never commit files under `data/` to git.
 * The project uses `pre-commit` for managing pre-commit hooks. To run all hooks on all files, use
     `uv run pre-commit run --all-files`. For more information, refer to the `.pre-commit-config.yaml` file.
+* Serving (FastAPI) commands:
+    * `uv run invoke sample-model [--spec configs/model/<name>.yaml]` trains a model on `data/processed` and saves
+      `models/model.joblib` with `models/model_card.json`.
+    * `uv run invoke serve-api [--reload]` serves the API on port 8000; Swagger UI at `/docs`.
+* Contracts between modules (API schema, model artifact, replay data, environment variables, Docker) are in
+    `docs/source/contracts.md`; follow them, or change them through a PR that updates that file.
 
 # Code style
 
