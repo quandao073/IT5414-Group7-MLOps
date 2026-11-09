@@ -21,6 +21,7 @@
     * `uv run invoke sample-model [--spec configs/model/<name>.yaml]` trains a model on `data/processed` and saves
       `models/model.joblib` with `models/model_card.json`.
     * `uv run invoke serve-api [--reload]` serves the API on port 8000; Swagger UI at `/docs`.
+    * `uv run invoke replay [--months 2017-01,2017-02] [--delay 0.5]` replays the 2017 bookings into the API.
 * Contracts between modules (API schema, model artifact, replay data, environment variables, Docker) are in
     `docs/source/contracts.md`; follow them, or change them through a PR that updates that file.
 
