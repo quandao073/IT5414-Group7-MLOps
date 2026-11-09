@@ -21,7 +21,7 @@
 | C5 | [Biến môi trường](#c5-bien-moi-truong) | Đề xuất | Platform |
 | C6 | MLflow Registry | Sẽ bổ sung | Training |
 | C7 | [Endpoint `/reload`](#c7-endpoint-reload) | Đề xuất, đã có code | Training (DAG retrain) |
-| C8 | Backend ONNX | Sẽ bổ sung | Load test |
+| C8 | [Backend ONNX](#c8-backend-onnx) | Đề xuất, đã có code | Load test, Platform |
 | C9 | [Bảng log dự đoán và nhãn](#c9-bang-log-du-doan-va-nhan) | Đề xuất, SQL đã chạy thử, API chưa ghi | Drift, Training, Platform |
 | C10 | [Metrics Prometheus](#c10-metrics-prometheus) | Đề xuất, đã có code | Platform |
 | C11 | [Service trong docker compose](#c11-docker-compose) | Đề xuất, đã có `docker-compose.yml` | Platform, cả nhóm |
@@ -142,6 +142,7 @@ Danh sách đầy đủ trong `.env.example` ở gốc repo. Bí mật (mật kh
 | Biến | Mặc định | Dùng bởi |
 |---|---|---|
 | `MODEL_SOURCE` | `file` (hiện chỉ có giá trị này; `mlflow` sẽ thêm ở C6) | API |
+| `MODEL_BACKEND` | `joblib`; `onnx` để chạy bằng ONNX Runtime (C8) | API |
 | `MODEL_PATH` | `models/model.joblib` (trong container: `/app/models/model.joblib`) | API |
 | `MODEL_CARD_PATH` | `models/model_card.json` (trong container: `/app/models/model_card.json`) | API |
 | `RELOAD_TOKEN` | trống: `/reload` không cần token | API, DAG retrain (bí mật, đặt trong `.env`) |
@@ -179,6 +180,38 @@ Cách DAG kiểm tra: gọi `/reload`, kiểm tra mã `200` và `current_version
 
 ```bash
 curl -X POST http://localhost:8000/reload -H "X-Reload-Token: $RELOAD_TOKEN"
+```
+
+## C8. Backend ONNX
+
+API chạy cùng một mô hình bằng hai backend, chọn bằng `MODEL_BACKEND` (C5): `joblib` (mặc định, scikit-learn) hoặc
+`onnx` (ONNX Runtime). Request, response và `/reload` giống hệt nhau; chỉ `backend` trong `api_model_info` (C10) và
+cột `backend` của log (C9) khác.
+
+**Cách export:** `BookingFeatureBuilder` là code pandas nên vẫn chạy bằng Python; phần sau nó (impute, log1p, scale,
+one-hot, bộ phân loại) thành đồ thị ONNX. Ensemble export mỗi thành viên thành một đồ thị và lấy trung bình xác suất
+như `AveragingClassifier`. Mã nguồn: `src/hotel_booking/onnx_export.py`.
+
+| Mục | Quy ước |
+|---|---|
+| Lệnh | `uv run invoke export-onnx` sau `invoke sample-model` (hoặc sau khi Training ghi mô hình mới, C2) |
+| File | `models/model.onnx` cho mô hình đơn; `model.0.onnx`, `model.1.onnx`... theo thứ tự thành viên cho ensemble |
+| Model card | Thêm mục `onnx`: `artifacts` (`file`, `sha256`), `opset` (17), `parity_rows`, `parity_max_abs_difference` |
+| Kiểm tra | Lúc export so xác suất ONNX với joblib trên tối đa 5000 dòng của `test.csv`; test yêu cầu sai lệch < 1e-5 |
+| Nạp | Backend `onnx` vẫn đọc `model.joblib` (lấy bộ tạo đặc trưng) và từ chối nạp nếu card thiếu mục `onnx` hoặc đồ thị không khớp `sha256` |
+| Thay mô hình | Ghi mô hình mới (C2) rồi `invoke export-onnx` rồi `/reload` (C7). Card mới chưa có mục `onnx` thì API backend `onnx` giữ mô hình cũ |
+
+Các điểm đã xử lý để export được mô hình của repo: converter riêng cho bước `log1p_nonnegative`, cho `OneHotEncoder`
+có category hiếm (`min_frequency`, `handle_unknown="infrequent_if_exist"`), cho LightGBM và XGBoost (qua
+`onnxmltools`). Cả `logistic_regression.yaml` và ensemble `champion.yaml` đều export được.
+
+**So sánh:** `uv run invoke benchmark` đo trên `test.csv` thời gian gọi mô hình (tạo đặc trưng + suy luận, không gồm
+HTTP) với 1 bản ghi và lô 1000 bản ghi (p50, p95, bản ghi/giây) và kích thước artifact, ghi `models/benchmark.json`
+và in bảng Markdown để đưa vào báo cáo. Load test qua HTTP dùng hai cấu hình:
+
+```bash
+MODEL_BACKEND=joblib uv run invoke serve-api
+MODEL_BACKEND=onnx uv run invoke serve-api
 ```
 
 ## C9. Bảng log dự đoán và nhãn
