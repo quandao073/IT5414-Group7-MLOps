@@ -34,6 +34,16 @@ def serve_api(ctx: Context, port: int = 8000, reload: bool = False) -> None:
 
 
 @task
+def replay(ctx: Context, api_url: str = "http://localhost:8000", months: str = "", delay: float = 0.0) -> None:
+    """Replay the 2017 bookings month by month into the API and release each month's labels."""
+    ctx.run(
+        f'uv run src/{PROJECT_NAME}/replay.py --api-url {api_url} --months "{months}" --delay {delay}',
+        echo=True,
+        pty=not WINDOWS,
+    )
+
+
+@task
 def test(ctx: Context) -> None:
     """Run tests."""
     ctx.run("uv run coverage run -m pytest tests/", echo=True, pty=not WINDOWS)

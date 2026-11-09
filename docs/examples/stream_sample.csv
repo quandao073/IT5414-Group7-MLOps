@@ -1,0 +1,21 @@
+booking_id,arrival_date,hotel,arrival_date_month,meal,market_segment,distribution_channel,reserved_room_type,deposit_type,customer_type,lead_time,arrival_date_year,arrival_date_week_number,arrival_date_day_of_month,stays_in_weekend_nights,stays_in_week_nights,adults,children,babies,is_repeated_guest,previous_cancellations,previous_bookings_not_canceled,agent,company,days_in_waiting_list,adr,total_of_special_requests,rooms_in_booking,assigned_room_type,booking_changes,required_car_parking_spaces,country,is_canceled
+530,2017-01-01,City Hotel,January,BB,Groups,Corporate,A,No Deposit,Transient,230,2017,52,1,2,4,1,0.0,0,0,0,0,,,0,234.94,1,1,A,0,0,GBR,0
+504,2017-01-02,Resort Hotel,January,HB,Offline TA/TO,Corporate,A,No Deposit,Transient,154,2017,1,2,0,5,2,0.0,0,0,1,0,,,10,213.68,1,1,A,0,0,PRT,1
+706,2017-01-02,Resort Hotel,January,SC,Offline TA/TO,Direct,D,Non Refund,Contract,260,2017,1,2,0,5,2,0.0,0,0,0,0,,40.0,10,232.95,0,1,D,1,1,GBR,1
+649,2017-01-03,City Hotel,January,SC,Corporate,Direct,D,Non Refund,Contract,281,2017,1,3,1,2,2,0.0,0,1,0,0,9.0,,0,40.06,0,1,D,1,0,GBR,1
+707,2017-01-03,Resort Hotel,January,HB,Offline TA/TO,Direct,E,Non Refund,Transient,153,2017,1,3,2,5,3,0.0,0,0,0,0,9.0,,0,220.0,0,1,E,0,0,GBR,1
+571,2017-01-07,City Hotel,January,HB,Corporate,Direct,D,No Deposit,Transient,323,2017,1,7,2,1,3,0.0,0,0,1,0,,40.0,0,196.35,0,1,D,1,0,FRA,1
+776,2017-01-07,Resort Hotel,January,Undefined,Corporate,TA/TO,D,No Deposit,Transient-Party,374,2017,1,7,0,3,2,0.0,1,0,1,0,9.0,40.0,10,49.09,1,1,D,1,0,FRA,1
+311,2017-01-08,City Hotel,January,SC,Online TA,TA/TO,E,Non Refund,Contract,174,2017,1,8,1,1,1,0.0,0,0,0,0,9.0,,10,153.47,0,1,E,0,0,PRT,1
+62,2017-01-09,City Hotel,January,HB,Online TA,TA/TO,A,Non Refund,Transient,103,2017,2,9,1,3,2,0.0,0,0,0,0,,,0,51.71,1,1,A,0,0,PRT,1
+547,2017-01-09,City Hotel,January,BB,Offline TA/TO,Direct,E,No Deposit,Transient,117,2017,2,9,1,1,1,0.0,0,0,0,0,240.0,,0,203.19,0,1,E,0,0,GBR,0
+116,2017-01-10,Resort Hotel,January,Undefined,Online TA,Corporate,A,No Deposit,Transient,236,2017,2,10,1,2,1,0.0,0,0,0,0,240.0,,0,182.99,1,1,A,1,0,GBR,0
+517,2017-01-12,City Hotel,January,BB,Online TA,Corporate,D,No Deposit,Contract,12,2017,2,12,1,2,2,0.0,0,0,0,2,,,0,182.22,0,1,D,1,0,PRT,0
+426,2017-01-13,City Hotel,January,HB,Online TA,Corporate,A,No Deposit,Transient,22,2017,2,13,1,3,3,0.0,1,0,0,2,9.0,,0,152.19,0,1,A,1,0,GBR,0
+173,2017-01-14,Resort Hotel,January,SC,Online TA,TA/TO,D,Non Refund,Contract,338,2017,2,14,1,2,1,,0,0,0,0,,,0,59.88,0,1,D,0,0,GBR,1
+276,2017-01-14,City Hotel,January,Undefined,Corporate,TA/TO,E,No Deposit,Transient,207,2017,2,14,0,5,1,0.0,0,0,1,0,,,0,114.5,2,1,E,1,0,GBR,0
+378,2017-01-14,Resort Hotel,January,Undefined,Direct,Corporate,E,Non Refund,Transient,280,2017,2,14,1,4,3,0.0,0,0,0,0,240.0,,0,130.67,2,1,E,1,0,FRA,1
+461,2017-01-14,City Hotel,January,SC,Offline TA/TO,Direct,D,Non Refund,Transient-Party,175,2017,2,14,2,4,3,0.0,0,0,0,0,,,0,127.6,0,1,D,1,0,FRA,1
+782,2017-01-14,Resort Hotel,January,Undefined,Direct,Direct,A,Non Refund,Contract,268,2017,2,14,1,5,2,0.0,0,0,0,0,9.0,,0,176.23,0,1,A,1,0,PRT,1
+607,2017-01-15,City Hotel,January,BB,Online TA,TA/TO,A,No Deposit,Transient,385,2017,2,15,0,2,2,0.0,0,0,0,0,240.0,,0,169.62,0,1,A,1,0,PRT,1
+683,2017-01-16,Resort Hotel,January,BB,Offline TA/TO,TA/TO,A,No Deposit,Contract,56,2017,3,16,1,3,1,0.0,0,0,0,0,240.0,,0,106.48,0,1,A,1,0,FRA,0

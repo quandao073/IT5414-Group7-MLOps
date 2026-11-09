@@ -17,7 +17,7 @@
 | C1 | [API request/response](#c1-api) | Đề xuất, đã có code | Frontend, load test |
 | C2 | [Artifact mô hình](#c2-artifact-mo-hinh) | Đề xuất, đã có code | Training |
 | C3 | [`rooms_in_booking` khi suy luận](#c3-rooms_in_booking) | Đề xuất, chờ Training xác nhận | Training, Frontend |
-| C4 | Dữ liệu replay và nhãn trễ | Sẽ bổ sung | Data, Drift |
+| C4 | [Dữ liệu replay và nhãn trễ](#c4-du-lieu-replay) | Đề xuất, đã có code | Data, Drift |
 | C5 | [Biến môi trường](#c5-bien-moi-truong) | Đề xuất | Platform |
 | C6 – C11 | MLflow, `/reload`, ONNX, bảng log, metrics, compose | Sẽ bổ sung | – |
 | C12 | [Docker image](#c12-docker) | Đề xuất, đã có Dockerfile | Platform, Training |
@@ -104,6 +104,25 @@ trùng mọi cột đầu vào).
 - Client nên gửi giá trị này nếu biết (như fixture `booking` trong `tests/conftest.py`).
 - Nếu bỏ trống: API đếm các bản ghi giống hệt nhau **trong cùng request**. Một bản ghi lẻ qua `/predict` nhận giá trị 1.
   Một nhóm phòng gửi chung qua `/predict/batch` được đếm đúng như lúc train.
+
+## C4. Dữ liệu replay
+
+Replay mô phỏng production bằng các đặt phòng có ngày đến năm 2017: `test` (01–04/2017) và `production_holdout`
+(05–08/2017).
+
+| Mục | Quy ước |
+|---|---|
+| Batch theo tháng | `data/stream/YYYY-MM.csv` (`2017-01` … `2017-08`), cùng cột với `data/processed/test.csv`, có `booking_id`, `arrival_date`, `is_canceled`. Thư mục này đã được `.gitignore` bỏ qua |
+| Tạo batch | `replay.py` tự tạo từ `data/processed/` nếu thư mục chưa có batch; file đã có thì giữ nguyên, nên Data có thể tự sinh batch thay thế miễn đúng tên file và cột |
+| Gửi | Mỗi tháng gửi lần lượt vào `POST /predict/batch`, cấu hình `--batch-size` (mặc định 200) và `--delay` (giây giữa hai request) |
+| Nhãn trễ | Nhãn của tháng M chỉ được ghi **sau khi** đã gửi xong tháng M, vào `data/stream/labels/YYYY-MM.csv` với cột `booking_id`, `is_canceled`, `month`, `released_at`. Khi có PostgreSQL, nhãn chuyển sang bảng `labels` (C9) |
+
+Ví dụ batch: `docs/examples/stream_sample.csv` (20 dòng dữ liệu **giả**, chỉ để xem cột).
+
+```bash
+uv run invoke serve-api            # cửa sổ 1
+uv run invoke replay --delay 0.5   # cửa sổ 2, hoặc --months 2017-01,2017-02
+```
 
 ## C5. Biến môi trường
 
