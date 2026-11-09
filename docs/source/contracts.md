@@ -20,7 +20,7 @@
 | C4 | Dữ liệu replay và nhãn trễ | Sẽ bổ sung | Data, Drift |
 | C5 | [Biến môi trường](#c5-bien-moi-truong) | Đề xuất | Platform |
 | C6 – C11 | MLflow, `/reload`, ONNX, bảng log, metrics, compose | Sẽ bổ sung | – |
-| C12 | Docker image | Sẽ bổ sung | Platform, Training |
+| C12 | [Docker image](#c12-docker) | Đề xuất, đã có Dockerfile | Platform, Training |
 | C13 | Checklist demo | Sẽ bổ sung | Cả nhóm |
 
 ## C1. API
@@ -114,3 +114,17 @@ Danh sách đầy đủ trong `.env.example` ở gốc repo. Bí mật (mật kh
 | `MODEL_PATH` | `models/model.joblib` (trong container: `/app/models/model.joblib`) | API |
 | `MODEL_CARD_PATH` | `models/model_card.json` (trong container: `/app/models/model_card.json`) | API |
 | `API_URL` | `http://localhost:8000` | Replay, Frontend, load test |
+
+## C12. Docker
+
+| Image | Dockerfile | Lệnh chạy |
+|---|---|---|
+| `api:latest` | `dockerfiles/api.dockerfile` | `docker run --rm -p 8000:8000 -v ./models:/app/models:ro api:latest` |
+| `train:latest` | `dockerfiles/train.dockerfile` | `docker run --rm -v ./data:/app/data -v ./models:/app/models train:latest` |
+
+- Build cả hai: `uv run invoke docker-build`.
+- Image dựa trên `python:3.12-slim-bookworm` (có `libgomp1` cho LightGBM/XGBoost), multi-stage với `uv sync --frozen
+  --no-dev`, nên chỉ cài dependency chính trong `uv.lock`.
+- Mô hình **không** đóng gói trong image API mà được mount vào `/app/models` (sau này nạp từ MLflow Registry).
+- Image train chạy `python -m hotel_booking.train` và có sẵn `configs/`; Training giữ cho `train.py` chạy được bằng
+  lệnh này, dữ liệu mount vào `/app/data`.
