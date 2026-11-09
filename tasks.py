@@ -21,6 +21,19 @@ def train(ctx: Context) -> None:
 
 
 @task
+def sample_model(ctx: Context, spec: str = "configs/model/logistic_regression.yaml") -> None:
+    """Train a model from a spec and save it with its card to models/ for the API."""
+    ctx.run(f"uv run src/{PROJECT_NAME}/sample_model.py --spec-path {spec}", echo=True, pty=not WINDOWS)
+
+
+@task
+def serve_api(ctx: Context, port: int = 8000, reload: bool = False) -> None:
+    """Serve the prediction API locally; Swagger UI at /docs."""
+    flags = " --reload" if reload else ""
+    ctx.run(f"uv run uvicorn {PROJECT_NAME}.api:app --port {port}{flags}", echo=True, pty=not WINDOWS)
+
+
+@task
 def test(ctx: Context) -> None:
     """Run tests."""
     ctx.run("uv run coverage run -m pytest tests/", echo=True, pty=not WINDOWS)

@@ -1,0 +1,15 @@
+{
+  "predictions": [
+    {
+      "probability": 0.3166,
+      "is_canceled": false
+    },
+    {
+      "probability": 0.9162,
+      "is_canceled": true
+    }
+  ],
+  "threshold": 0.5101,
+  "model_version": "logistic_regression-example",
+  "warnings": []
+}
