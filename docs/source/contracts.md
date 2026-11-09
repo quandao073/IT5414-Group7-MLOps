@@ -19,7 +19,12 @@
 | C3 | [`rooms_in_booking` khi suy luận](#c3-rooms_in_booking) | Đề xuất, chờ Training xác nhận | Training, Frontend |
 | C4 | [Dữ liệu replay và nhãn trễ](#c4-du-lieu-replay) | Đề xuất, đã có code | Data, Drift |
 | C5 | [Biến môi trường](#c5-bien-moi-truong) | Đề xuất | Platform |
-| C6 – C11 | MLflow, `/reload`, ONNX, bảng log, metrics, compose | Sẽ bổ sung | – |
+| C6 | MLflow Registry | Sẽ bổ sung | Training |
+| C7 | Endpoint `/reload` | Sẽ bổ sung | Training (DAG retrain) |
+| C8 | Backend ONNX | Sẽ bổ sung | Load test |
+| C9 | [Bảng log dự đoán và nhãn](#c9-bang-log-du-doan-va-nhan) | Đề xuất, SQL đã chạy thử, API chưa ghi | Drift, Training, Platform |
+| C10 | Metrics Prometheus | Sẽ bổ sung | Platform |
+| C11 | Service API trong compose | Sẽ bổ sung | Platform |
 | C12 | [Docker image](#c12-docker) | Đề xuất, đã có Dockerfile | Platform, Training |
 | C13 | Checklist demo | Sẽ bổ sung | Cả nhóm |
 
@@ -133,6 +138,56 @@ Danh sách đầy đủ trong `.env.example` ở gốc repo. Bí mật (mật kh
 | `MODEL_PATH` | `models/model.joblib` (trong container: `/app/models/model.joblib`) | API |
 | `MODEL_CARD_PATH` | `models/model_card.json` (trong container: `/app/models/model_card.json`) | API |
 | `API_URL` | `http://localhost:8000` | Replay, Frontend, load test |
+
+## C9. Bảng log dự đoán và nhãn
+
+PostgreSQL. DDL: `docs/examples/sql/schema.sql`, truy vấn mẫu: `docs/examples/sql/queries.sql` (đã chạy thử trên
+PostgreSQL 16). API sẽ chạy DDL lúc khởi động (`CREATE TABLE IF NOT EXISTS`), nên không cần migration riêng; ai cũng
+có thể chạy lại file này mà không mất dữ liệu.
+
+**`prediction_logs`**: mỗi bản ghi được chấm là một dòng; một request batch ghi nhiều dòng cùng `request_id`.
+
+| Cột | Kiểu | Ý nghĩa |
+|---|---|---|
+| `id` | `BIGSERIAL` PK | |
+| `request_id` | `UUID` | Một request HTTP |
+| `row_index` | `INTEGER` | Vị trí bản ghi trong request (0 với `/predict`) |
+| `created_at` | `TIMESTAMPTZ` | Lúc ghi log |
+| `endpoint` | `TEXT` | `/predict` hoặc `/predict/batch` |
+| `model_version` | `TEXT` | Như trong response (C1, C2) |
+| `backend` | `TEXT` | `joblib` hoặc `onnx` (C8) |
+| `booking_id` | `BIGINT`, có thể `NULL` | Khóa nối với `labels`; replay luôn gửi, client thường có thể bỏ trống |
+| `replay_month` | `TEXT`, có thể `NULL` | Tháng `YYYY-MM` khi request đến từ replay |
+| `input` | `JSONB` | Bản ghi đầu vào đúng như mô hình nhận: các cột `MODEL_INPUT_COLUMNS`, đã điền `rooms_in_booking` |
+| `probability` | `DOUBLE PRECISION` | Xác suất hủy, trong [0, 1] |
+| `threshold` | `DOUBLE PRECISION` | Ngưỡng lúc dự đoán |
+| `is_canceled` | `BOOLEAN` | Quyết định của mô hình |
+| `latency_ms` | `DOUBLE PRECISION` | Thời gian xử lý request (cùng giá trị cho mọi dòng của một batch) |
+| `warnings` | `JSONB` | Mảng `warnings` của response (C1) |
+
+**`labels`**: nhãn thật, replay ghi sau khi gửi xong cả tháng (C4).
+
+| Cột | Kiểu | Ý nghĩa |
+|---|---|---|
+| `booking_id` | `BIGINT` PK | Như `booking_id` của `data/processed/*.csv` |
+| `is_canceled` | `SMALLINT` (0/1) | Nhãn thật |
+| `month` | `TEXT` | Tháng `YYYY-MM` được mở nhãn |
+| `released_at` | `TIMESTAMPTZ` | Lúc mở nhãn |
+
+**Truy vấn mẫu** (`queries.sql`):
+
+1. Đầu vào của một tháng, tách thành cột: cho drift service so với dữ liệu tham chiếu `data/processed/train.csv`.
+2. Phân bố xác suất theo tháng và phiên bản mô hình.
+3. Độ chính xác theo tháng sau khi đã có nhãn.
+4. Dữ liệu có nhãn để retrain: bản ghi mới nhất của mỗi `booking_id` đã có nhãn.
+5. Số request có cảnh báo đầu vào, theo tháng và cột.
+
+**Thay đổi đi kèm ở C1** (sẽ làm cùng việc ghi log, chỉ thêm, không phá request hiện tại): mỗi `Booking` nhận thêm
+trường không bắt buộc `booking_id`, và request có thể kèm header `X-Replay-Month: YYYY-MM`. Hai giá trị này chỉ ghi
+vào log, không đưa vào mô hình.
+
+Kết nối: biến môi trường `DATABASE_URL` (ví dụ `postgresql+psycopg://user:password@postgres:5432/hotel`). Không
+có `DATABASE_URL` thì API vẫn chạy, chỉ không ghi log.
 
 ## C12. Docker
 
