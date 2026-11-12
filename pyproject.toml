@@ -24,7 +24,7 @@ dependencies = [
     "numpy==2.5.3",
     "onnx==1.23.2",
     "onnxmltools==1.16.0",
-    "onnxruntime==1.31.1",
+    "onnxruntime==1.31.1; sys_platform != 'darwin' or platform_machine != 'x86_64'",  # no Intel macOS wheel
     "pandas==3.0.6",
     "prometheus-client==0.26.0",
     "psycopg[binary]==3.3.8",
