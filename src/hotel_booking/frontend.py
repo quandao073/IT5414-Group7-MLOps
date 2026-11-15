@@ -28,10 +28,15 @@ SAMPLE_CSV = Path(__file__).resolve().parents[2] / "docs" / "examples" / "stream
 SAMPLE_LABEL = "file mẫu stream_sample.csv"
 THRESHOLD_PRECISION = Decimal("0.001")
 CSV_READ_ERRORS = (pd.errors.ParserError, pd.errors.EmptyDataError, FileNotFoundError, UnicodeDecodeError)
+SOURCE_UPLOAD = "upload"
+SOURCE_SAMPLE = "sample"
+BATCH_CLEAR_FLAG = "batch_cleared"
 BATCH_STATE_KEYS = (
     "batch_frame",
     "batch_payloads",
     "batch_label",
+    "batch_source",
+    "batch_upload_signature",
     "batch_scored_payloads",
     "batch_result",
     "batch_error",
@@ -301,14 +306,20 @@ def render_single_tab(client: ApiClient) -> None:
     result_panel(result)
 
 
-def _clear_batch() -> None:
-    """Forget the chosen batch file, its payload and the last scoring result.
-
-    The stored upload signature is kept on purpose, so the file that is still held by the uploader
-    is not read and scored again right after the user cleared the results.
-    """
+def _drop_batch_state() -> None:
+    """Forget the stored batch frame, its payload, its source and the last scoring result."""
     for key in BATCH_STATE_KEYS:
         st.session_state.pop(key, None)
+
+
+def _clear_batch() -> None:
+    """Forget the batch and flag the rerun so a still-present upload reloads unscored.
+
+    The flag is consumed by `render_batch_tab` on the same rerun the button callback triggers, so
+    the reload shows a preview instead of calling the API behind the user's back.
+    """
+    _drop_batch_state()
+    st.session_state[BATCH_CLEAR_FLAG] = True
 
 
 def _upload_signature(uploaded: Any) -> str:
@@ -326,43 +337,83 @@ def _upload_signature(uploaded: Any) -> str:
     return f"{uploaded.name}:{uploaded.size}"
 
 
-def _load_batch_frame(reader: Callable[[], pd.DataFrame], label: str, upload_signature: str | None) -> None:
-    """Read one CSV, validate it and store it as the batch to score on the next render.
+def _next_batch_action(
+    upload_signature: str | None,
+    stored_signature: str | None,
+    stored_source: str | None,
+    *,
+    use_sample: bool,
+    use_upload: bool,
+) -> str | None:
+    """Decide which file the batch tab loads on this render.
 
-    The upload signature is recorded first, so a file that fails validation is not read again on
-    every rerun.
+    Args:
+        upload_signature: Signature of the file currently held by the uploader, or `None` when the
+            uploader is empty.
+        stored_signature: Upload signature recorded when the stored frame was loaded. It is also
+            recorded when the sample file replaced an upload, so that upload is not reloaded until
+            the user asks for it again.
+        stored_source: Origin of the stored frame, `"upload"` or `"sample"`, or `None` when nothing
+            is stored. It keeps the sample from being reported as an upload.
+        use_sample: Whether the user pressed "Dùng file mẫu".
+        use_upload: Whether the user pressed "Dùng file đã tải lên".
+
+    Returns:
+        `"sample"` when the sample button was pressed, `"upload"` when the user asked for the present
+        upload, `"upload"` for an upload whose signature differs from the stored one, and `None` when
+        the stored frame still matches the widgets.
+    """
+    if use_sample:
+        return SOURCE_SAMPLE
+    if use_upload and upload_signature is not None:
+        return SOURCE_UPLOAD
+    if upload_signature is not None and upload_signature != stored_signature:
+        return SOURCE_UPLOAD
+    return None
+
+
+def _load_batch_frame(
+    reader: Callable[[], pd.DataFrame],
+    *,
+    label: str,
+    source: str,
+    upload_signature: str | None,
+) -> None:
+    """Read one CSV, validate it and store it as the batch to score on the next render.
 
     Args:
         reader: Callable returning the frame, called once here so parsing errors can be reported.
         label: Origin of the file shown in the preview caption.
-        upload_signature: Signature of the upload the frame comes from, or `None` when it comes from
-            the sample file or there is no upload.
+        source: `"upload"` or `"sample"`, remembered so the sample is never mistaken for an upload.
+        upload_signature: Signature of the upload the frame comes from, or `None` when the uploader
+            is empty.
     """
-    st.session_state["batch_upload_signature"] = upload_signature
     try:
         frame = reader()
     except CSV_READ_ERRORS as exc:
-        _clear_batch()
+        _drop_batch_state()
         st.error(f"Không đọc được file CSV: {exc}")
         return
 
     payloads, missing = csv_to_bookings(frame)
     if missing:
-        _clear_batch()
+        _drop_batch_state()
         st.error("File thiếu cột: " + ", ".join(missing))
         return
     if not payloads:
-        _clear_batch()
+        _drop_batch_state()
         st.error("File không có dòng dữ liệu nào.")
         return
     if len(payloads) > MAX_BATCH_SIZE:
-        _clear_batch()
+        _drop_batch_state()
         st.error(f"Chỉ chấm tối đa {MAX_BATCH_SIZE} dòng mỗi lần; file có {len(payloads)} dòng.")
         return
 
     st.session_state["batch_frame"] = frame
     st.session_state["batch_payloads"] = payloads
     st.session_state["batch_label"] = label
+    st.session_state["batch_source"] = source
+    st.session_state["batch_upload_signature"] = upload_signature
     st.session_state["batch_scored_payloads"] = None
     st.session_state["batch_result"] = None
     st.session_state["batch_error"] = None
@@ -392,23 +443,48 @@ def _score_batch(client: ApiClient, payloads: list[dict[str, Any]]) -> None:
 def render_batch_tab(client: ApiClient) -> None:
     """Render the CSV tab: choose the file, score it and offer the results as a download.
 
-    The chosen frame lives in `st.session_state`, so it survives reruns triggered by the download
-    button, the sidebar or the health check. `predict_batch` runs when the stored payload differs
-    from the last scored payload, or when the user presses "Chấm điểm".
+    The chosen frame and its source live in `st.session_state`, so they survive reruns triggered by
+    the download button, the sidebar or the health check. `predict_batch` runs when an explicit
+    action loads a payload that differs from the last scored one, or when the user presses
+    "Chấm điểm"; reloading a still-present upload after "Xóa kết quả" only shows a preview.
 
     Args:
         client: Client used to score the batch.
     """
     uploaded = st.file_uploader("Chọn file CSV", type="csv")
     upload_signature = _upload_signature(uploaded) if uploaded is not None else None
+    stored_source: str | None = st.session_state.get("batch_source")
     use_sample = st.button("Dùng file mẫu", key="use_sample")
+    show_upload_button = uploaded is not None and (use_sample or stored_source != SOURCE_UPLOAD)
+    use_upload = st.button("Dùng file đã tải lên", key="use_upload") if show_upload_button else False
     score_clicked = st.button("Chấm điểm", key="score_batch")
     st.button("Xóa kết quả", key="clear_batch", on_click=_clear_batch)
 
-    if use_sample:
-        _load_batch_frame(lambda: pd.read_csv(SAMPLE_CSV), SAMPLE_LABEL, upload_signature)
-    elif uploaded is not None and upload_signature != st.session_state.get("batch_upload_signature"):
-        _load_batch_frame(lambda: pd.read_csv(uploaded), f"file {uploaded.name}", upload_signature)
+    cleared = bool(st.session_state.pop(BATCH_CLEAR_FLAG, False))
+    action = _next_batch_action(
+        upload_signature,
+        st.session_state.get("batch_upload_signature"),
+        stored_source,
+        use_sample=use_sample,
+        use_upload=use_upload,
+    )
+    autoscore = False
+    if action == SOURCE_SAMPLE:
+        _load_batch_frame(
+            lambda: pd.read_csv(SAMPLE_CSV),
+            label=SAMPLE_LABEL,
+            source=SOURCE_SAMPLE,
+            upload_signature=upload_signature,
+        )
+        autoscore = not cleared
+    elif action == SOURCE_UPLOAD and uploaded is not None:
+        _load_batch_frame(
+            lambda: pd.read_csv(uploaded),
+            label=f"file {uploaded.name}",
+            source=SOURCE_UPLOAD,
+            upload_signature=upload_signature,
+        )
+        autoscore = not cleared
 
     frame: pd.DataFrame | None = st.session_state.get("batch_frame")
     if frame is None:
@@ -416,7 +492,7 @@ def render_batch_tab(client: ApiClient) -> None:
         return
 
     payloads: list[dict[str, Any]] = st.session_state["batch_payloads"]
-    if score_clicked or payloads != st.session_state.get("batch_scored_payloads"):
+    if score_clicked or (autoscore and payloads != st.session_state.get("batch_scored_payloads")):
         _score_batch(client, payloads)
 
     error = st.session_state.get("batch_error")
