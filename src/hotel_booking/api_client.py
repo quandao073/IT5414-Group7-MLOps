@@ -13,6 +13,7 @@ from hotel_booking.schemas import MAX_BATCH_SIZE
 
 DEFAULT_API_URL: str = "http://localhost:8000"
 DEFAULT_TIMEOUT: float = 10.0
+MAX_INVALID_COLUMNS: int = 10
 
 
 @dataclass(frozen=True)
@@ -117,6 +118,50 @@ def csv_to_bookings(frame: pd.DataFrame) -> tuple[List[dict[str, Any]], List[str
     return records, []
 
 
+def _json(response: httpx.Response) -> Any:
+    """Decode the body of one response as JSON.
+
+    Args:
+        response: Response returned by `ApiClient._request`.
+
+    Returns:
+        The decoded body.
+
+    Raises:
+        ApiError: When the body is not valid JSON, for example a redirect body or the HTML page of a
+            proxy or of the wrong service.
+    """
+    try:
+        return response.json()
+    except ValueError as exc:
+        raise ApiError(f"API trả về dữ liệu không phải JSON: {response.text[:200]}") from exc
+
+
+def _invalid_columns(detail: Any) -> list[str]:
+    """Collect the field names reported by a 422 `detail` payload.
+
+    Args:
+        detail: The `detail` member of the error body, expected to be a list of validation errors.
+
+    Returns:
+        The last `loc` entry of every error that names a string field, deduplicated in order. An
+        empty list when `detail` is not a list, or when its items carry no usable `loc`.
+    """
+    if not isinstance(detail, list):
+        return []
+    columns: list[str] = []
+    for item in detail:
+        if not isinstance(item, dict):
+            continue
+        loc = item.get("loc")
+        if not isinstance(loc, list) or not loc:
+            continue
+        field = loc[-1]
+        if isinstance(field, str) and field not in columns:
+            columns.append(field)
+    return columns
+
+
 class ApiClient:
     """HTTP client for the prediction API."""
 
@@ -156,11 +201,11 @@ class ApiClient:
             **kwargs: Extra arguments forwarded to `httpx.Client.request`.
 
         Returns:
-            The response when its status is below 400.
+            The response when its status is below 300.
 
         Raises:
             ApiError: If the connection fails, the request times out, or the API answers with
-                status 503, status 422, or any other status of 400 or more.
+                status 503, status 422, a redirection, or any other status of 300 or more.
         """
         try:
             response = self._client.request(method, path, **kwargs)
@@ -175,11 +220,16 @@ class ApiClient:
             raise ApiError("API chưa nạp được mô hình (503). Chạy `uv run invoke sample-model` rồi khởi động lại API.")
 
         if response.status_code == 422:
-            detail = response.json().get("detail", [])
-            column_names = [item["loc"][1] for item in detail]
-            raise ApiError("Dữ liệu không hợp lệ (422) ở cột: " + ", ".join(column_names))
+            payload = _json(response)
+            detail = payload.get("detail") if isinstance(payload, dict) else None
+            columns = _invalid_columns(detail)
+            if not columns:
+                raise ApiError(f"Dữ liệu không hợp lệ (422): {response.text[:200]}")
+            shown = ", ".join(columns[:MAX_INVALID_COLUMNS])
+            suffix = " …" if len(columns) > MAX_INVALID_COLUMNS else ""
+            raise ApiError("Dữ liệu không hợp lệ (422) ở cột: " + shown + suffix)
 
-        if response.status_code >= 400:
+        if response.status_code >= 300:
             raise ApiError(f"API trả lỗi {response.status_code}: {response.text[:200]}")
 
         return response
@@ -194,7 +244,7 @@ class ApiClient:
             ApiError: If the request fails or the API returns an error status.
         """
         response = self._request("GET", "/health")
-        data = response.json()
+        data = _json(response)
         return Health(
             status=data["status"],
             model_loaded=data["model_loaded"],
@@ -215,7 +265,7 @@ class ApiClient:
             ApiError: If the request fails or the API returns an error status.
         """
         response = self._request("POST", "/predict", json=booking)
-        data = response.json()
+        data = _json(response)
         prediction = Prediction(probability=data["probability"], is_canceled=data["is_canceled"])
         return PredictResult(
             prediction=prediction,
@@ -243,7 +293,7 @@ class ApiClient:
             raise ApiError("Chỉ chấm tối đa 10.000 bản ghi mỗi lần.")
 
         response = self._request("POST", "/predict/batch", json={"bookings": bookings})
-        data = response.json()
+        data = _json(response)
         predictions = [
             Prediction(probability=p["probability"], is_canceled=p["is_canceled"]) for p in data["predictions"]
         ]

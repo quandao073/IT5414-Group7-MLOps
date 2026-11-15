@@ -161,6 +161,97 @@ def test_predict_one_maps_422_to_column_names(booking: dict) -> None:
     assert str(excinfo.value) == "Dữ liệu không hợp lệ (422) ở cột: adr, adults"
 
 
+def test_predict_batch_422_names_the_invalid_columns(booking: dict) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            422,
+            json={
+                "detail": [
+                    {"loc": ["body", "bookings", 0, "adr"], "msg": "bad"},
+                    {"loc": ["body", "bookings", 1, "adr"], "msg": "bad"},
+                    {"loc": ["body", "bookings", 1, "adults"], "msg": "bad"},
+                ]
+            },
+        )
+
+    with pytest.raises(ApiError) as excinfo:
+        make_client(handler).predict_batch([booking, booking])
+    assert str(excinfo.value) == "Dữ liệu không hợp lệ (422) ở cột: adr, adults"
+
+
+def test_predict_batch_422_caps_the_column_list(booking: dict) -> None:
+    detail = [{"loc": ["body", "bookings", 0, f"col{index}"], "msg": "bad"} for index in range(12)]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(422, json={"detail": detail})
+
+    with pytest.raises(ApiError) as excinfo:
+        make_client(handler).predict_batch([booking])
+    message = str(excinfo.value)
+    assert message == "Dữ liệu không hợp lệ (422) ở cột: " + ", ".join(f"col{index}" for index in range(10)) + " …"
+
+
+def test_predict_batch_422_without_a_detail_list_falls_back(booking: dict) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(422, json={"detail": "not a list"})
+
+    with pytest.raises(ApiError) as excinfo:
+        make_client(handler).predict_batch([booking])
+    assert str(excinfo.value).startswith("Dữ liệu không hợp lệ (422): ")
+
+
+def test_predict_batch_422_with_a_non_dict_item_falls_back(booking: dict) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(422, json={"detail": ["nope"]})
+
+    with pytest.raises(ApiError) as excinfo:
+        make_client(handler).predict_batch([booking])
+    assert str(excinfo.value).startswith("Dữ liệu không hợp lệ (422): ")
+
+
+def test_health_maps_a_non_json_body(booking: dict) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text="<html>proxy</html>")
+
+    with pytest.raises(ApiError) as excinfo:
+        make_client(handler).health()
+    assert str(excinfo.value) == "API trả về dữ liệu không phải JSON: <html>proxy</html>"
+
+
+def test_predict_one_maps_a_non_json_body(booking: dict) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text="<html>proxy</html>")
+
+    with pytest.raises(ApiError):
+        make_client(handler).predict_one(booking)
+
+
+def test_predict_batch_maps_a_non_json_body(booking: dict) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text="<html>proxy</html>")
+
+    with pytest.raises(ApiError):
+        make_client(handler).predict_batch([booking])
+
+
+def test_predict_one_maps_a_redirect(booking: dict) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(307, headers={"location": "http://elsewhere/predict"}, text="moved")
+
+    with pytest.raises(ApiError) as excinfo:
+        make_client(handler).predict_one(booking)
+    assert str(excinfo.value) == "API trả lỗi 307: moved"
+
+
+def test_health_maps_a_redirect() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(302, headers={"location": "http://elsewhere/health"}, text="moved")
+
+    with pytest.raises(ApiError) as excinfo:
+        make_client(handler).health()
+    assert "302" in str(excinfo.value)
+
+
 def test_predict_one_maps_503(booking: dict) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(503, json={"detail": "No model loaded."})
