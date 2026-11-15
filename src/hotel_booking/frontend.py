@@ -255,10 +255,10 @@ def render_sidebar(client: ApiClient) -> None:
     """Render the API URL input and the health check of the API.
 
     Args:
-        client: Client whose `base_url` pre-fills the URL input and whose health is shown.
+        client: Client whose `base_url` is displayed read-only and whose health is shown.
     """
     with st.sidebar:
-        st.text_input("API URL", value=client.base_url)
+        st.text_input("API URL", value=client.base_url, disabled=True)
         try:
             health = client.health()
         except ApiError as exc:
@@ -503,22 +503,22 @@ def render_batch_tab(client: ApiClient) -> None:
         )
         autoscore = not cleared
 
-    error = st.session_state.get("batch_error")
-    if error:
-        st.error(error)
-
     frame: pd.DataFrame | None = st.session_state.get("batch_frame")
     if frame is None:
-        if not error:
+        error = st.session_state.get("batch_error")
+        if error:
+            st.error(error)
+        else:
             st.caption("Chọn file CSV hoặc dùng file mẫu để bắt đầu.")
         return
 
     payloads: list[dict[str, Any]] = st.session_state["batch_payloads"]
     if score_clicked or (autoscore and payloads != st.session_state.get("batch_scored_payloads")):
         _score_batch(client, payloads)
-        score_error = st.session_state.get("batch_error")
-        if score_error and score_error != error:
-            st.error(score_error)
+
+    score_error = st.session_state.get("batch_error")
+    if score_error:
+        st.error(score_error)
 
     label = st.session_state.get("batch_label", "")
     result: BatchResult | None = st.session_state.get("batch_result")

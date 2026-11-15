@@ -7,7 +7,7 @@ import pandas as pd
 from streamlit.testing.v1 import AppTest
 
 from hotel_booking import api_client, frontend
-from hotel_booking.api_client import ApiClient, BatchResult, PredictResult, Prediction
+from hotel_booking.api_client import ApiClient, ApiError, BatchResult, PredictResult, Prediction
 from hotel_booking.config import MODEL_INPUT_COLUMNS
 from hotel_booking.frontend import (
     ADVANCED_DEFAULTS,
@@ -198,6 +198,7 @@ def test_frontend_renders_and_reports_api_down(monkeypatch) -> None:
     assert not app.exception
     assert app.title[0].value == "Dự báo hủy phòng khách sạn"
     assert app.sidebar.text_input[0].value == "http://127.0.0.1:9"
+    assert app.sidebar.text_input[0].proto.disabled
     assert any("Không kết nối được API" in element.value for element in app.error)
 
 
@@ -209,7 +210,7 @@ def test_batch_preview_survives_an_unrelated_rerun(monkeypatch) -> None:
     assert len(app.dataframe) == 1
     assert any("dòng từ file mẫu" in element.value for element in app.caption)
 
-    app.sidebar.text_input[0].set_value("http://127.0.0.1:8").run()
+    app.run()
     assert not app.exception
     assert len(app.dataframe) == 1
     assert any("dòng từ file mẫu" in element.value for element in app.caption)
@@ -240,7 +241,7 @@ def test_batch_results_are_scored_once_and_kept_across_reruns(monkeypatch) -> No
     assert len(app.dataframe) == 1
     assert any("ngưỡng quyết định: 0.500" in element.value for element in app.caption)
 
-    app.sidebar.text_input[0].set_value("http://127.0.0.1:8").run()
+    app.run()
     assert not app.exception
     assert calls == [20]
     assert len(app.dataframe) == 1
@@ -289,7 +290,7 @@ def test_use_upload_returns_to_the_uploaded_file_after_the_sample(monkeypatch) -
     assert not app.exception
     assert any(f"dòng từ file {UPLOAD_NAME}" in element.value for element in app.caption)
 
-    app.sidebar.text_input[0].set_value("http://127.0.0.1:8").run()
+    app.run()
     assert not app.exception
     assert any(f"dòng từ file {UPLOAD_NAME}" in element.value for element in app.caption)
     assert "use_upload" not in [button.key for button in app.button]
@@ -305,7 +306,7 @@ def test_rejected_upload_is_not_read_again_on_the_next_rerun(monkeypatch) -> Non
     assert any("File thiếu cột: lead_time" in element.value for element in app.error)
     assert len(reads) == 1
 
-    app.sidebar.text_input[0].set_value("http://127.0.0.1:8").run()
+    app.run()
     assert not app.exception
     assert any("File thiếu cột: lead_time" in element.value for element in app.error)
     assert len(reads) == 1
@@ -321,6 +322,36 @@ def test_oversized_upload_is_rejected_before_conversion(monkeypatch) -> None:
     assert not app.exception
     assert any(f"Chỉ chấm tối đa {MAX_BATCH_SIZE} dòng mỗi lần" in element.value for element in app.error)
     assert conversions == []
+
+
+def test_batch_error_disappears_when_a_later_attempt_succeeds(monkeypatch) -> None:
+    monkeypatch.setenv("API_URL", "http://127.0.0.1:9")
+    attempts: list[int] = []
+
+    def flaky_predict_batch(self: ApiClient, payloads: list[dict[str, Any]]) -> BatchResult:
+        attempts.append(len(payloads))
+        if len(attempts) == 1:
+            raise ApiError("Batch lỗi thử nghiệm.")
+        return BatchResult(
+            predictions=[Prediction(probability=0.4, is_canceled=False) for _ in payloads],
+            threshold=0.5,
+            model_version="v1",
+            warnings=[],
+        )
+
+    monkeypatch.setattr(ApiClient, "predict_batch", flaky_predict_batch)
+    app = AppTest.from_file(str(APP_PATH), default_timeout=60).run()
+    app.button(key="use_sample").click().run()
+    assert not app.exception
+    assert attempts == [20]
+    assert any("Batch lỗi thử nghiệm." in element.value for element in app.error)
+    assert len(app.metric) == 0
+
+    app.button(key="score_batch").click().run()
+    assert not app.exception
+    assert attempts == [20, 20]
+    assert not any("Batch lỗi thử nghiệm." in element.value for element in app.error)
+    assert app.metric[0].value == "40.0%"
 
 
 def test_clear_reloads_the_upload_as_an_unscored_preview(monkeypatch) -> None:
