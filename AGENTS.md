@@ -17,6 +17,8 @@
     fetch it with `uv run dvc pull` and never commit files under `data/` to git.
 * The project uses `pre-commit` for managing pre-commit hooks. To run all hooks on all files, use
     `uv run pre-commit run --all-files`. For more information, refer to the `.pre-commit-config.yaml` file.
+* The project has a Streamlit frontend. Run it with `uv run invoke serve-frontend` (needs the API from
+  `uv run invoke serve-api` and `API_URL` set, default `http://localhost:8000`).
 * Serving (FastAPI) commands:
     * `uv run invoke sample-model [--spec configs/model/<name>.yaml]` trains a model on `data/processed` and saves
       `models/model.joblib` with `models/model_card.json`.

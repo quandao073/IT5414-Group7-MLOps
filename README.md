@@ -117,7 +117,11 @@ uv run pre-commit install   # cài git hook (ruff, kiểm tra file)
 uv run dvc pull             # tải data/raw/hotel_bookings.csv
 uv run invoke preprocess-data
 uv run invoke test          # chạy test kèm coverage
+uv run invoke serve-api        # cửa sổ 1: API tại http://localhost:8000
+uv run invoke serve-frontend   # cửa sổ 2: giao diện tại http://localhost:8501
 ```
+
+Giao diện Streamlit đọc `API_URL` (mặc định `http://localhost:8000`) và báo lỗi ngay trên sidebar khi API chưa chạy.
 
 DVC remote chưa được cấu hình. Trong lúc chờ, tải `hotel_bookings.csv` từ Kaggle vào `data/raw/` thay cho `dvc pull`. Unit test chạy được cả khi chưa có dữ liệu thật: các test cần file này sẽ tự bỏ qua.
 
