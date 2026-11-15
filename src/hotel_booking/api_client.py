@@ -162,6 +162,134 @@ def _invalid_columns(detail: Any) -> list[str]:
     return columns
 
 
+def _shape_error(response: httpx.Response) -> ApiError:
+    """Build the error returned when a decoded body does not match the response schema.
+
+    Args:
+        response: Response whose body could not be read with the expected shape.
+
+    Returns:
+        The `ApiError` carrying the start of the body for the user.
+    """
+    return ApiError(f"API trả về dữ liệu không đúng định dạng: {response.text[:200]}")
+
+
+def _mapping(response: httpx.Response, data: Any) -> dict[str, Any]:
+    """Read a decoded body as a JSON object.
+
+    Args:
+        response: Response the body was decoded from.
+        data: Decoded body returned by `_json`.
+
+    Returns:
+        The body as a mapping.
+
+    Raises:
+        ApiError: When the body is not a JSON object, for example a top-level list.
+    """
+    if not isinstance(data, dict):
+        raise _shape_error(response)
+    return data
+
+
+def _required_field(response: httpx.Response, data: Any, key: str) -> Any:
+    """Read one required member of a decoded body.
+
+    Args:
+        response: Response the body was decoded from.
+        data: Decoded body returned by `_json`.
+        key: Name of the required member.
+
+    Returns:
+        The raw value stored under `key`.
+
+    Raises:
+        ApiError: When the body is not a JSON object or the key is missing.
+    """
+    payload = _mapping(response, data)
+    if key not in payload:
+        raise _shape_error(response)
+    return payload[key]
+
+
+def _optional_field(response: httpx.Response, data: Any, key: str, default: Any) -> Any:
+    """Read one optional member of a decoded body.
+
+    Args:
+        response: Response the body was decoded from.
+        data: Decoded body returned by `_json`.
+        key: Name of the optional member.
+        default: Value returned when the body is not a JSON object or the key is missing.
+
+    Returns:
+        The value stored under `key`, or `default`.
+    """
+    if not isinstance(data, dict):
+        return default
+    return data.get(key, default)
+
+
+def _number_field(response: httpx.Response, data: Any, key: str) -> float:
+    """Read one required member of a decoded body as a number.
+
+    Args:
+        response: Response the body was decoded from.
+        data: Decoded body returned by `_json`.
+        key: Name of the required numeric member.
+
+    Returns:
+        The value as a `float`.
+
+    Raises:
+        ApiError: When the body is malformed, the key is missing, or the value is not a number.
+    """
+    value = _required_field(response, data, key)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise _shape_error(response)
+    return float(value)
+
+
+def _bool_field(response: httpx.Response, data: Any, key: str) -> bool:
+    """Read one required member of a decoded body as a boolean.
+
+    Args:
+        response: Response the body was decoded from.
+        data: Decoded body returned by `_json`.
+        key: Name of the required boolean member.
+
+    Returns:
+        The value as a `bool`.
+
+    Raises:
+        ApiError: When the body is malformed, the key is missing, or the value is not a boolean.
+    """
+    value = _required_field(response, data, key)
+    if not isinstance(value, bool):
+        raise _shape_error(response)
+    return value
+
+
+def _records_field(response: httpx.Response, data: Any, key: str) -> list[dict[str, Any]]:
+    """Read one required member of a decoded body as a list of JSON objects.
+
+    Args:
+        response: Response the body was decoded from.
+        data: Decoded body returned by `_json`.
+        key: Name of the required list member.
+
+    Returns:
+        The list of objects stored under `key`.
+
+    Raises:
+        ApiError: When the body is malformed, the key is missing, or the value is not a list of
+            JSON objects.
+    """
+    value = _required_field(response, data, key)
+    if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
+        raise _shape_error(response)
+    return value
+
+
 class ApiClient:
     """HTTP client for the prediction API."""
 
@@ -221,7 +349,7 @@ class ApiClient:
 
         if response.status_code == 422:
             payload = _json(response)
-            detail = payload.get("detail") if isinstance(payload, dict) else None
+            detail = _optional_field(response, payload, "detail", None)
             columns = _invalid_columns(detail)
             if not columns:
                 raise ApiError(f"Dữ liệu không hợp lệ (422): {response.text[:200]}")
@@ -246,9 +374,9 @@ class ApiClient:
         response = self._request("GET", "/health")
         data = _json(response)
         return Health(
-            status=data["status"],
-            model_loaded=data["model_loaded"],
-            model_version=data.get("model_version"),
+            status=_required_field(response, data, "status"),
+            model_loaded=_bool_field(response, data, "model_loaded"),
+            model_version=_optional_field(response, data, "model_version", None),
         )
 
     def predict_one(self, booking: dict[str, Any]) -> PredictResult:
@@ -266,12 +394,15 @@ class ApiClient:
         """
         response = self._request("POST", "/predict", json=booking)
         data = _json(response)
-        prediction = Prediction(probability=data["probability"], is_canceled=data["is_canceled"])
+        prediction = Prediction(
+            probability=_number_field(response, data, "probability"),
+            is_canceled=_bool_field(response, data, "is_canceled"),
+        )
         return PredictResult(
             prediction=prediction,
-            threshold=data["threshold"],
-            model_version=data["model_version"],
-            warnings=data.get("warnings", []),
+            threshold=_number_field(response, data, "threshold"),
+            model_version=_required_field(response, data, "model_version"),
+            warnings=_optional_field(response, data, "warnings", []),
         )
 
     def predict_batch(self, bookings: List[dict[str, Any]]) -> BatchResult:
@@ -295,11 +426,15 @@ class ApiClient:
         response = self._request("POST", "/predict/batch", json={"bookings": bookings})
         data = _json(response)
         predictions = [
-            Prediction(probability=p["probability"], is_canceled=p["is_canceled"]) for p in data["predictions"]
+            Prediction(
+                probability=_number_field(response, item, "probability"),
+                is_canceled=_bool_field(response, item, "is_canceled"),
+            )
+            for item in _records_field(response, data, "predictions")
         ]
         return BatchResult(
             predictions=predictions,
-            threshold=data["threshold"],
-            model_version=data["model_version"],
-            warnings=data.get("warnings", []),
+            threshold=_number_field(response, data, "threshold"),
+            model_version=_required_field(response, data, "model_version"),
+            warnings=_optional_field(response, data, "warnings", []),
         )

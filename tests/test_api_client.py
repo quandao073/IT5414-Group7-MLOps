@@ -270,3 +270,54 @@ def test_predict_one_maps_other_status(booking: dict) -> None:
     with pytest.raises(ApiError) as excinfo:
         make_client(handler).predict_one(booking)
     assert str(excinfo.value) == "API trả lỗi 500: boom"
+
+
+def test_health_rejects_a_body_that_is_not_the_health_schema() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"foo": 1})
+
+    with pytest.raises(ApiError) as excinfo:
+        make_client(handler).health()
+    message = str(excinfo.value)
+    assert message.startswith("API trả về dữ liệu không đúng định dạng: ")
+    assert '{"foo"' in message
+
+
+def test_predict_one_rejects_a_body_that_is_not_the_prediction_schema(booking: dict) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"foo": 1})
+
+    with pytest.raises(ApiError) as excinfo:
+        make_client(handler).predict_one(booking)
+    message = str(excinfo.value)
+    assert message.startswith("API trả về dữ liệu không đúng định dạng: ")
+    assert '{"foo"' in message
+
+
+def test_predict_batch_rejects_a_body_that_is_not_the_batch_schema(booking: dict) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"foo": 1})
+
+    with pytest.raises(ApiError) as excinfo:
+        make_client(handler).predict_batch([booking])
+    message = str(excinfo.value)
+    assert message.startswith("API trả về dữ liệu không đúng định dạng: ")
+    assert '{"foo"' in message
+
+
+def test_predict_one_rejects_a_probability_that_is_not_a_number(booking: dict) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "probability": "abc",
+                "is_canceled": True,
+                "threshold": 0.18,
+                "model_version": "v1",
+                "warnings": [],
+            },
+        )
+
+    with pytest.raises(ApiError) as excinfo:
+        make_client(handler).predict_one(booking)
+    assert str(excinfo.value).startswith("API trả về dữ liệu không đúng định dạng: ")
