@@ -1,8 +1,12 @@
+import csv
+import io
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
 from streamlit.testing.v1 import AppTest
 
+from hotel_booking import api_client, frontend
 from hotel_booking.api_client import ApiClient, BatchResult, PredictResult, Prediction
 from hotel_booking.config import MODEL_INPUT_COLUMNS
 from hotel_booking.frontend import (
@@ -13,11 +17,37 @@ from hotel_booking.frontend import (
     booking_payload,
     format_probability,
 )
+from hotel_booking.schemas import MAX_BATCH_SIZE
 
 APP_PATH = Path(__file__).resolve().parents[1] / "src" / "hotel_booking" / "frontend.py"
 SAMPLE_CSV_PATH = Path(__file__).resolve().parents[1] / "docs" / "examples" / "stream_sample.csv"
+SAMPLE_LINES = SAMPLE_CSV_PATH.read_text(encoding="utf-8").splitlines()
 UPLOAD_NAME = "bookings.csv"
-UPLOAD_BYTES = ("\n".join(SAMPLE_CSV_PATH.read_text(encoding="utf-8").splitlines()[:3]) + "\n").encode("utf-8")
+UPLOAD_CSV_TEXT = "\n".join(SAMPLE_LINES[:3]) + "\n"
+UPLOAD_BYTES = UPLOAD_CSV_TEXT.encode("utf-8")
+
+
+def csv_without_column(text: str, column: str) -> str:
+    """Remove one column from a CSV document.
+
+    Args:
+        text: CSV document, header first.
+        column: Name of the column to drop from every row.
+
+    Returns:
+        The document without that column, terminated by a newline.
+    """
+    rows = list(csv.reader(io.StringIO(text)))
+    dropped = rows[0].index(column)
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    for row in rows:
+        writer.writerow([cell for position, cell in enumerate(row) if position != dropped])
+    return buffer.getvalue()
+
+
+MISSING_COLUMN_BYTES = csv_without_column(UPLOAD_CSV_TEXT, "lead_time").encode("utf-8")
+OVERSIZED_BYTES = (SAMPLE_LINES[0] + "\n" + (SAMPLE_LINES[1] + "\n") * (MAX_BATCH_SIZE + 1)).encode("utf-8")
 
 MAIN_VALUES: dict[str, Any] = {
     "hotel": "City Hotel",
@@ -71,6 +101,50 @@ def batch_state(app: AppTest) -> dict[str, Any]:
     """
     state: dict[str, Any] = app._tree.session_state.filtered_state
     return state
+
+
+def count_read_csv(monkeypatch: Any) -> list[str]:
+    """Count the calls the frontend makes to `pandas.read_csv`.
+
+    Args:
+        monkeypatch: Pytest fixture used to patch `pandas.read_csv`.
+
+    Returns:
+        The list the delegate appends the first argument of every call to.
+    """
+    calls: list[str] = []
+    real_read_csv = pd.read_csv
+
+    def fake_read_csv(*args: Any, **kwargs: Any) -> pd.DataFrame:
+        calls.append(str(args[0]) if args else "")
+        frame: pd.DataFrame = real_read_csv(*args, **kwargs)
+        return frame
+
+    monkeypatch.setattr(frontend.pd, "read_csv", fake_read_csv)
+    return calls
+
+
+def spy_csv_to_bookings(monkeypatch: Any) -> list[int]:
+    """Record the frames passed to `csv_to_bookings` while still converting them.
+
+    The frontend script binds the function with `from hotel_booking.api_client import ...` on every
+    run, so the patch has to live on the `api_client` module.
+
+    Args:
+        monkeypatch: Pytest fixture used to patch the conversion function.
+
+    Returns:
+        The list the spy appends the row count of every frame to.
+    """
+    calls: list[int] = []
+    real_convert = api_client.csv_to_bookings
+
+    def spy(frame: pd.DataFrame) -> tuple[list[dict[str, Any]], list[str]]:
+        calls.append(len(frame))
+        return real_convert(frame)
+
+    monkeypatch.setattr(api_client, "csv_to_bookings", spy)
+    return calls
 
 
 def test_booking_payload_merges_advanced_defaults() -> None:
@@ -204,14 +278,49 @@ def test_use_upload_returns_to_the_uploaded_file_after_the_sample(monkeypatch) -
     assert not app.exception
     assert calls == [2]
     assert any(f"dòng từ file {UPLOAD_NAME}" in element.value for element in app.caption)
+    assert "use_upload" not in [button.key for button in app.button]
 
     app.button(key="use_sample").click().run()
     assert not app.exception
     assert any("dòng từ file mẫu" in element.value for element in app.caption)
+    assert "use_upload" in [button.key for button in app.button]
 
     app.button(key="use_upload").click().run()
     assert not app.exception
     assert any(f"dòng từ file {UPLOAD_NAME}" in element.value for element in app.caption)
+
+    app.sidebar.text_input[0].set_value("http://127.0.0.1:8").run()
+    assert not app.exception
+    assert any(f"dòng từ file {UPLOAD_NAME}" in element.value for element in app.caption)
+    assert "use_upload" not in [button.key for button in app.button]
+
+
+def test_rejected_upload_is_not_read_again_on_the_next_rerun(monkeypatch) -> None:
+    monkeypatch.setenv("API_URL", "http://127.0.0.1:9")
+    reads = count_read_csv(monkeypatch)
+    app = AppTest.from_file(str(APP_PATH), default_timeout=60).run()
+    app.file_uploader[0].upload("missing_column.csv", MISSING_COLUMN_BYTES, "text/csv")
+    app.run()
+    assert not app.exception
+    assert any("File thiếu cột: lead_time" in element.value for element in app.error)
+    assert len(reads) == 1
+
+    app.sidebar.text_input[0].set_value("http://127.0.0.1:8").run()
+    assert not app.exception
+    assert any("File thiếu cột: lead_time" in element.value for element in app.error)
+    assert len(reads) == 1
+    assert not any("Chọn file CSV hoặc dùng file mẫu" in element.value for element in app.caption)
+
+
+def test_oversized_upload_is_rejected_before_conversion(monkeypatch) -> None:
+    monkeypatch.setenv("API_URL", "http://127.0.0.1:9")
+    conversions = spy_csv_to_bookings(monkeypatch)
+    app = AppTest.from_file(str(APP_PATH), default_timeout=60).run()
+    app.file_uploader[0].upload("too_big.csv", OVERSIZED_BYTES, "text/csv")
+    app.run()
+    assert not app.exception
+    assert any(f"Chỉ chấm tối đa {MAX_BATCH_SIZE} dòng mỗi lần" in element.value for element in app.error)
+    assert conversions == []
 
 
 def test_clear_reloads_the_upload_as_an_unscored_preview(monkeypatch) -> None:

@@ -31,16 +31,8 @@ CSV_READ_ERRORS = (pd.errors.ParserError, pd.errors.EmptyDataError, FileNotFound
 SOURCE_UPLOAD = "upload"
 SOURCE_SAMPLE = "sample"
 BATCH_CLEAR_FLAG = "batch_cleared"
-BATCH_STATE_KEYS = (
-    "batch_frame",
-    "batch_payloads",
-    "batch_label",
-    "batch_source",
-    "batch_upload_signature",
-    "batch_scored_payloads",
-    "batch_result",
-    "batch_error",
-)
+BATCH_FRAME_KEYS = ("batch_frame", "batch_payloads", "batch_label", "batch_scored_payloads", "batch_result")
+BATCH_STATE_KEYS = (*BATCH_FRAME_KEYS, "batch_error", "batch_source", "batch_upload_signature")
 
 CATEGORY_CHOICES: dict[str, list[str]] = {
     "hotel": ["City Hotel", "Resort Hotel"],
@@ -312,6 +304,20 @@ def _drop_batch_state() -> None:
         st.session_state.pop(key, None)
 
 
+def _reject_batch(message: str) -> None:
+    """Drop the stored frame and remember why the file was rejected.
+
+    The upload signature and the source are left in place, so the rejected file is not read and
+    converted again on every rerun; `render_batch_tab` renders the stored message instead.
+
+    Args:
+        message: User-facing reason of the rejection.
+    """
+    for key in BATCH_FRAME_KEYS:
+        st.session_state.pop(key, None)
+    st.session_state["batch_error"] = message
+
+
 def _clear_batch() -> None:
     """Forget the batch and flag the rerun so a still-present upload reloads unscored.
 
@@ -381,6 +387,9 @@ def _load_batch_frame(
 ) -> None:
     """Read one CSV, validate it and store it as the batch to score on the next render.
 
+    The source and the upload signature are recorded before the file is read, so a rejected file is
+    neither read nor converted again on the following reruns; only its message is kept.
+
     Args:
         reader: Callable returning the frame, called once here so parsing errors can be reported.
         label: Origin of the file shown in the preview caption.
@@ -388,25 +397,24 @@ def _load_batch_frame(
         upload_signature: Signature of the upload the frame comes from, or `None` when the uploader
             is empty.
     """
+    st.session_state["batch_source"] = source
+    st.session_state["batch_upload_signature"] = upload_signature
     try:
         frame = reader()
     except CSV_READ_ERRORS as exc:
-        _drop_batch_state()
-        st.error(f"Không đọc được file CSV: {exc}")
+        _reject_batch(f"Không đọc được file CSV: {exc}")
+        return
+
+    if len(frame) > MAX_BATCH_SIZE:
+        _reject_batch(f"Chỉ chấm tối đa {MAX_BATCH_SIZE} dòng mỗi lần; file có {len(frame)} dòng.")
         return
 
     payloads, missing = csv_to_bookings(frame)
     if missing:
-        _drop_batch_state()
-        st.error("File thiếu cột: " + ", ".join(missing))
+        _reject_batch("File thiếu cột: " + ", ".join(missing))
         return
     if not payloads:
-        _drop_batch_state()
-        st.error("File không có dòng dữ liệu nào.")
-        return
-    if len(payloads) > MAX_BATCH_SIZE:
-        _drop_batch_state()
-        st.error(f"Chỉ chấm tối đa {MAX_BATCH_SIZE} dòng mỗi lần; file có {len(payloads)} dòng.")
+        _reject_batch("File không có dòng dữ liệu nào.")
         return
 
     st.session_state["batch_frame"] = frame
@@ -453,9 +461,18 @@ def render_batch_tab(client: ApiClient) -> None:
     """
     uploaded = st.file_uploader("Chọn file CSV", type="csv")
     upload_signature = _upload_signature(uploaded) if uploaded is not None else None
+    stored_signature: str | None = st.session_state.get("batch_upload_signature")
     stored_source: str | None = st.session_state.get("batch_source")
     use_sample = st.button("Dùng file mẫu", key="use_sample")
-    show_upload_button = uploaded is not None and (use_sample or stored_source != SOURCE_UPLOAD)
+    pending_action = _next_batch_action(
+        upload_signature,
+        stored_signature,
+        stored_source,
+        use_sample=use_sample,
+        use_upload=False,
+    )
+    shown_source = pending_action if pending_action is not None else stored_source
+    show_upload_button = uploaded is not None and shown_source != SOURCE_UPLOAD
     use_upload = st.button("Dùng file đã tải lên", key="use_upload") if show_upload_button else False
     score_clicked = st.button("Chấm điểm", key="score_batch")
     st.button("Xóa kết quả", key="clear_batch", on_click=_clear_batch)
@@ -463,7 +480,7 @@ def render_batch_tab(client: ApiClient) -> None:
     cleared = bool(st.session_state.pop(BATCH_CLEAR_FLAG, False))
     action = _next_batch_action(
         upload_signature,
-        st.session_state.get("batch_upload_signature"),
+        stored_signature,
         stored_source,
         use_sample=use_sample,
         use_upload=use_upload,
@@ -486,18 +503,22 @@ def render_batch_tab(client: ApiClient) -> None:
         )
         autoscore = not cleared
 
+    error = st.session_state.get("batch_error")
+    if error:
+        st.error(error)
+
     frame: pd.DataFrame | None = st.session_state.get("batch_frame")
     if frame is None:
-        st.caption("Chọn file CSV hoặc dùng file mẫu để bắt đầu.")
+        if not error:
+            st.caption("Chọn file CSV hoặc dùng file mẫu để bắt đầu.")
         return
 
     payloads: list[dict[str, Any]] = st.session_state["batch_payloads"]
     if score_clicked or (autoscore and payloads != st.session_state.get("batch_scored_payloads")):
         _score_batch(client, payloads)
-
-    error = st.session_state.get("batch_error")
-    if error:
-        st.error(error)
+        score_error = st.session_state.get("batch_error")
+        if score_error and score_error != error:
+            st.error(score_error)
 
     label = st.session_state.get("batch_label", "")
     result: BatchResult | None = st.session_state.get("batch_result")
