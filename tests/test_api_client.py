@@ -7,13 +7,13 @@ import pytest
 
 from hotel_booking.api_client import ApiClient, ApiError, csv_to_bookings
 from hotel_booking.config import MODEL_INPUT_COLUMNS
+from hotel_booking.schemas import MAX_BATCH_SIZE
 
 
 def test_csv_to_bookings_drops_columns_the_api_rejects(booking: dict) -> None:
     frame = pd.DataFrame([{**booking, "booking_id": 7, "is_canceled": 1, "assigned_room_type": "A"}])
     payloads, missing = csv_to_bookings(frame)
     assert missing == []
-    # MODEL_INPUT_COLUMNS includes rooms_in_booking, so payload should have 26 columns
     assert set(payloads[0]) == set(MODEL_INPUT_COLUMNS)
 
 
@@ -23,6 +23,22 @@ def test_csv_to_bookings_turns_nan_into_none(booking: dict) -> None:
     assert payloads[0]["children"] is None
     assert payloads[0]["agent"] is None
     assert payloads[0]["company"] is None
+
+
+def test_csv_to_bookings_turns_pd_na_into_none(booking: dict) -> None:
+    frame = pd.DataFrame([{**booking, "children": pd.NA, "agent": pd.NA, "company": pd.NA}])
+    payloads, _ = csv_to_bookings(frame)
+    assert payloads[0]["children"] is None
+    assert payloads[0]["agent"] is None
+    assert payloads[0]["company"] is None
+    assert json.loads(json.dumps(payloads[0]))["children"] is None
+
+
+def test_csv_to_bookings_turns_blank_rooms_in_booking_into_none(booking: dict) -> None:
+    frame = pd.DataFrame([{**booking, "rooms_in_booking": np.nan}])
+    payloads, _ = csv_to_bookings(frame)
+    assert payloads[0]["rooms_in_booking"] is None
+    assert json.loads(json.dumps(payloads[0]))["rooms_in_booking"] is None
 
 
 def test_csv_to_bookings_reports_missing_columns(booking: dict) -> None:
@@ -86,28 +102,51 @@ def test_predict_batch_preserves_order(booking: dict) -> None:
     assert [p.probability for p in result.predictions] == [0.9, 0.1]
 
 
+def test_predict_batch_accepts_exactly_max_batch_size(booking: dict) -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        assert len(json.loads(request.content)["bookings"]) == MAX_BATCH_SIZE
+        return httpx.Response(
+            200,
+            json={
+                "predictions": [{"probability": 0.5, "is_canceled": False}],
+                "threshold": 0.18,
+                "model_version": "v1",
+                "warnings": [],
+            },
+        )
+
+    make_client(handler).predict_batch([booking] * MAX_BATCH_SIZE)
+    assert len(requests) == 1
+
+
 def test_predict_batch_rejects_more_than_max_batch_size(booking: dict) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         raise AssertionError("no request expected")
 
-    with pytest.raises(ApiError, match="10.000"):
-        make_client(handler).predict_batch([booking] * 10_001)
+    with pytest.raises(ApiError) as excinfo:
+        make_client(handler).predict_batch([booking] * (MAX_BATCH_SIZE + 1))
+    assert str(excinfo.value) == "Chỉ chấm tối đa 10.000 bản ghi mỗi lần."
 
 
 def test_predict_one_maps_connection_error(booking: dict) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("refused", request=request)
 
-    with pytest.raises(ApiError, match="Không kết nối được API tới"):
+    with pytest.raises(ApiError) as excinfo:
         make_client(handler).predict_one(booking)
+    assert str(excinfo.value) == ("Không kết nối được API tại http://test. Chạy `uv run invoke serve-api` để bật API.")
 
 
 def test_predict_one_maps_timeout(booking: dict) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ReadTimeout("slow", request=request)
 
-    with pytest.raises(ApiError, match="không phản hồi"):
+    with pytest.raises(ApiError) as excinfo:
         make_client(handler).predict_one(booking)
+    assert str(excinfo.value) == "API tại http://test không phản hồi sau 1 giây."
 
 
 def test_predict_one_maps_422_to_column_names(booking: dict) -> None:
@@ -119,13 +158,24 @@ def test_predict_one_maps_422_to_column_names(booking: dict) -> None:
 
     with pytest.raises(ApiError) as excinfo:
         make_client(handler).predict_one(booking)
-    assert "adr" in str(excinfo.value)
-    assert "adults" in str(excinfo.value)
+    assert str(excinfo.value) == "Dữ liệu không hợp lệ (422) ở cột: adr, adults"
 
 
 def test_predict_one_maps_503(booking: dict) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(503, json={"detail": "No model loaded."})
 
-    with pytest.raises(ApiError, match="chưa nạp được mô hình"):
+    with pytest.raises(ApiError) as excinfo:
         make_client(handler).predict_one(booking)
+    assert str(excinfo.value) == (
+        "API chưa nạp được mô hình (503). Chạy `uv run invoke sample-model` rồi khởi động lại API."
+    )
+
+
+def test_predict_one_maps_other_status(booking: dict) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, text="boom")
+
+    with pytest.raises(ApiError) as excinfo:
+        make_client(handler).predict_one(booking)
+    assert str(excinfo.value) == "API trả lỗi 500: boom"
