@@ -3,8 +3,8 @@
 from dataclasses import dataclass
 from typing import Any, List
 
-import numpy as np
 import httpx
+import numpy as np
 import pandas as pd
 
 from hotel_booking.config import INPUT_COLUMNS
@@ -71,7 +71,7 @@ def _convert_value(val: Any) -> Any:
         Converted value with numpy integers/floats converted to Python types,
         and NaN/pd.NA converted to None.
     """
-    if pd.isna(val) if isinstance(val, float) else False:
+    if pd.isna(val):
         return None
     if isinstance(val, np.integer):
         return int(val)
@@ -95,19 +95,18 @@ def csv_to_bookings(frame: pd.DataFrame) -> tuple[List[dict[str, Any]], List[str
         Tuple of (payloads, missing_columns). If any INPUT_COLUMNS are missing
         from the frame, payloads is an empty list and missing lists the column names.
     """
-    # Check if rooms_in_booking is present before reindex
+    # Save rooms_in_booking values before reindex removes the column
     has_rooms_in_booking = "rooms_in_booking" in frame.columns
+    rooms_in_booking_vals: list[int | None] = []
+    if has_rooms_in_booking:
+        for i in range(len(frame)):
+            v = frame["rooms_in_booking"].iloc[i]
+            rooms_in_booking_vals.append(_convert_value(v))
 
     missing = [col for col in INPUT_COLUMNS if col not in frame.columns]
 
     if missing:
         return [], missing
-
-    # Save rooms_in_booking values before reindex removes the column
-    rooms_in_booking_vals: list[int | None] = []
-    if has_rooms_in_booking:
-        for _ in range(len(frame)):
-            rooms_in_booking_vals.append(int(frame["rooms_in_booking"].iloc[len(rooms_in_booking_vals)]))
 
     # All INPUT_COLUMNS are present; reindex to ensure column order
     frame = frame.reindex(columns=INPUT_COLUMNS)
@@ -151,7 +150,7 @@ class ApiClient:
         return self._timeout
 
     def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
-        """Make an HTTP request and handle connection errors and timeouts.
+        """Make an HTTP request and handle connection errors, timeouts, and HTTP errors.
 
         Parameters
         ----------
@@ -173,13 +172,28 @@ class ApiClient:
         """
         try:
             response = self._client.request(method, path, **kwargs)
-            return response
         except (httpx.ConnectError, httpx.ConnectTimeout) as e:
             raise ApiError(
                 f"Không kết nối được API tới {self._base_url}. " f"Chạy `uv run invoke serve-api` để bắt API."
             ) from e
         except httpx.TimeoutException as e:
             raise ApiError(f"API tới {self._base_url} không phản hồi sau {self._timeout:.0f} giây.") from e
+
+        # Map HTTP status codes to user-facing Vietnamese error messages
+        if response.status_code == 503:
+            raise ApiError(
+                "API chưa nạp được mô hình (503). " "Chạy `uv run invoke sample-model` để khởi động lại API."
+            )
+
+        if response.status_code == 422:
+            detail = response.json().get("detail", [])
+            column_names = [item["loc"][1] for item in detail]
+            raise ApiError("Dữ liệu không hợp lệ (422) " + ", ".join(column_names))
+
+        if response.status_code >= 400:
+            raise ApiError(f"API trả về {response.status_code}: {response.text[:200]}")
+
+        return response
 
     def health(self) -> Health:
         """Check API health.
@@ -203,16 +217,7 @@ class ApiClient:
                 model_version=data.get("model_version"),
             )
 
-        if response.status_code == 503:
-            raise ApiError(
-                "API chưa được nhập đầy đủ mô hình (503). " "Chạy `uv run invoke sample-model` để khởi động lại API."
-            )
-
-        if response.status_code == 422:
-            detail = response.json().get("detail", [])
-            column_names = [item["loc"][1] for item in detail]
-            raise ApiError("Dữ liệu không hợp lệ (422) " + ", ".join(column_names))
-
+        # Status code already raised by _request, but fallback for safety
         raise ApiError(f"API trả về {response.status_code}: {response.text[:200]}")
 
     def predict_one(self, booking: dict[str, Any]) -> PredictResult:
@@ -247,16 +252,7 @@ class ApiClient:
                 warnings=data.get("warnings", []),
             )
 
-        if response.status_code == 503:
-            raise ApiError(
-                "API chưa được nhập đầy đủ mô hình (503). " "Chạy `uv run invoke sample-model` để khởi động lại API."
-            )
-
-        if response.status_code == 422:
-            detail = response.json().get("detail", [])
-            column_names = [item["loc"][1] for item in detail]
-            raise ApiError("Dữ liệu không hợp lệ (422) " + ", ".join(column_names))
-
+        # Status code already raised by _request, but fallback for safety
         raise ApiError(f"API trả về {response.status_code}: {response.text[:200]}")
 
     def predict_batch(self, bookings: List[dict[str, Any]]) -> BatchResult:
@@ -278,7 +274,7 @@ class ApiClient:
             a non-200 status code, or a connection error occurs.
         """
         if len(bookings) > MAX_BATCH_SIZE:
-            raise ApiError("Chế độ chậm quá 10.000 bản ghi tối đa.")
+            raise ApiError("Chỉ chấm tối đa 10.000 bản ghi mỗi lần.")
 
         response = self._request("POST", "/predict/batch", json={"bookings": bookings})
 
@@ -298,14 +294,5 @@ class ApiClient:
                 warnings=data.get("warnings", []),
             )
 
-        if response.status_code == 503:
-            raise ApiError(
-                "API chưa được nhập đầy đủ mô hình (503). " "Chạy `uv run invoke sample-model` để khởi động lại API."
-            )
-
-        if response.status_code == 422:
-            detail = response.json().get("detail", [])
-            column_names = [item["loc"][1] for item in detail]
-            raise ApiError("Dữ liệu không hợp lệ (422) " + ", ".join(column_names))
-
+        # Status code already raised by _request, but fallback for safety
         raise ApiError(f"API trả về {response.status_code}: {response.text[:200]}")

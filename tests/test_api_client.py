@@ -13,6 +13,7 @@ def test_csv_to_bookings_drops_columns_the_api_rejects(booking: dict) -> None:
     frame = pd.DataFrame([{**booking, "booking_id": 7, "is_canceled": 1, "assigned_room_type": "A"}])
     payloads, missing = csv_to_bookings(frame)
     assert missing == []
+    # MODEL_INPUT_COLUMNS includes rooms_in_booking, so payload should have 26 columns
     assert set(payloads[0]) == set(MODEL_INPUT_COLUMNS)
 
 
@@ -126,5 +127,5 @@ def test_predict_one_maps_503(booking: dict) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(503, json={"detail": "No model loaded."})
 
-    with pytest.raises(ApiError, match="chưa được nhập"):
+    with pytest.raises(ApiError, match="chưa nạp được mô hình"):
         make_client(handler).predict_one(booking)
