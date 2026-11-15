@@ -3,7 +3,7 @@ from typing import Any
 
 from streamlit.testing.v1 import AppTest
 
-from hotel_booking.api_client import PredictResult, Prediction
+from hotel_booking.api_client import ApiClient, BatchResult, PredictResult, Prediction
 from hotel_booking.config import MODEL_INPUT_COLUMNS
 from hotel_booking.frontend import ADVANCED_DEFAULTS, booking_payload, format_probability
 
@@ -78,3 +78,62 @@ def test_frontend_renders_and_reports_api_down(monkeypatch) -> None:
     assert app.title[0].value == "Dự báo hủy phòng khách sạn"
     assert app.sidebar.text_input[0].value == "http://127.0.0.1:9"
     assert any("Không kết nối được API" in element.value for element in app.error)
+
+
+def test_batch_preview_survives_an_unrelated_rerun(monkeypatch) -> None:
+    monkeypatch.setenv("API_URL", "http://127.0.0.1:9")
+    app = AppTest.from_file(str(APP_PATH), default_timeout=60).run()
+    app.button(key="use_sample").click().run()
+    assert not app.exception
+    assert len(app.dataframe) == 1
+    assert any("dòng từ file mẫu" in element.value for element in app.caption)
+
+    app.sidebar.text_input[0].set_value("http://127.0.0.1:8").run()
+    assert not app.exception
+    assert len(app.dataframe) == 1
+    assert any("dòng từ file mẫu" in element.value for element in app.caption)
+
+
+def test_clear_batch_drops_the_stored_preview(monkeypatch) -> None:
+    monkeypatch.setenv("API_URL", "http://127.0.0.1:9")
+    app = AppTest.from_file(str(APP_PATH), default_timeout=60).run()
+    app.button(key="use_sample").click().run()
+    assert len(app.dataframe) == 1
+
+    app.button(key="clear_batch").click().run()
+    assert not app.exception
+    assert len(app.dataframe) == 0
+    assert any("Chọn file CSV hoặc dùng file mẫu" in element.value for element in app.caption)
+
+
+def test_batch_results_are_scored_once_and_kept_across_reruns(monkeypatch) -> None:
+    monkeypatch.setenv("API_URL", "http://127.0.0.1:9")
+    calls: list[int] = []
+
+    def fake_predict_batch(self: ApiClient, payloads: list[dict[str, Any]]) -> BatchResult:
+        calls.append(len(payloads))
+        return BatchResult(
+            predictions=[Prediction(probability=0.4, is_canceled=True) for _ in payloads],
+            threshold=0.5,
+            model_version="v1",
+            warnings=[],
+        )
+
+    monkeypatch.setattr(ApiClient, "predict_batch", fake_predict_batch)
+    app = AppTest.from_file(str(APP_PATH), default_timeout=60).run()
+    app.button(key="use_sample").click().run()
+    assert not app.exception
+    assert calls == [20]
+    assert len(app.dataframe) == 1
+    assert any("ngưỡng quyết định: 0.500" in element.value for element in app.caption)
+
+    app.sidebar.text_input[0].set_value("http://127.0.0.1:8").run()
+    assert not app.exception
+    assert calls == [20]
+    assert len(app.dataframe) == 1
+    assert any("ngưỡng quyết định: 0.500" in element.value for element in app.caption)
+
+    app.button(key="score_batch").click().run()
+    assert not app.exception
+    assert calls == [20, 20]
+    assert len(app.dataframe) == 1

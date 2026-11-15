@@ -1,6 +1,7 @@
 """Streamlit frontend for the hotel booking cancellation API (contracts C1 and C5)."""
 
 import os
+from collections.abc import Callable
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from typing import Any
@@ -24,7 +25,17 @@ st.set_page_config(page_title="Hotel booking cancellation", layout="wide")
 st.title("Dự báo hủy phòng khách sạn")
 
 SAMPLE_CSV = Path(__file__).resolve().parents[2] / "docs" / "examples" / "stream_sample.csv"
+SAMPLE_LABEL = "file mẫu stream_sample.csv"
 THRESHOLD_PRECISION = Decimal("0.001")
+CSV_READ_ERRORS = (pd.errors.ParserError, pd.errors.EmptyDataError, FileNotFoundError, UnicodeDecodeError)
+BATCH_STATE_KEYS = (
+    "batch_frame",
+    "batch_payloads",
+    "batch_label",
+    "batch_scored_payloads",
+    "batch_result",
+    "batch_error",
+)
 
 CATEGORY_CHOICES: dict[str, list[str]] = {
     "hotel": ["City Hotel", "Resort Hotel"],
@@ -290,54 +301,142 @@ def render_single_tab(client: ApiClient) -> None:
     result_panel(result)
 
 
-def _read_batch_frame(uploaded: Any) -> pd.DataFrame | None:
-    """Read the uploaded CSV, or the sample file when the user asked for it.
+def _clear_batch() -> None:
+    """Forget the chosen batch file, its payload and the last scoring result.
+
+    The stored upload signature is kept on purpose, so the file that is still held by the uploader
+    is not read and scored again right after the user cleared the results.
+    """
+    for key in BATCH_STATE_KEYS:
+        st.session_state.pop(key, None)
+
+
+def _upload_signature(uploaded: Any) -> str:
+    """Identify an uploaded file so that a new upload replaces the stored one.
 
     Args:
-        uploaded: File object returned by `st.file_uploader`, or `None`.
+        uploaded: File object returned by `st.file_uploader`.
 
     Returns:
-        The uploaded bookings, or `None` when the user has not chosen a file yet.
+        The Streamlit file id when the file object exposes one, otherwise its name and size.
     """
-    if st.button("Dùng file mẫu"):
-        return pd.read_csv(SAMPLE_CSV)
-    if uploaded is None:
-        return None
-    return pd.read_csv(uploaded)
+    file_id = getattr(uploaded, "file_id", None)
+    if file_id:
+        return str(file_id)
+    return f"{uploaded.name}:{uploaded.size}"
 
 
-def render_batch_tab(client: ApiClient) -> None:
-    """Render the CSV tab: upload the file, score it and offer the results as a download.
+def _load_batch_frame(reader: Callable[[], pd.DataFrame], label: str, upload_signature: str | None) -> None:
+    """Read one CSV, validate it and store it as the batch to score on the next render.
+
+    The upload signature is recorded first, so a file that fails validation is not read again on
+    every rerun.
 
     Args:
-        client: Client used to score the batch when the user uploads a file.
+        reader: Callable returning the frame, called once here so parsing errors can be reported.
+        label: Origin of the file shown in the preview caption.
+        upload_signature: Signature of the upload the frame comes from, or `None` when it comes from
+            the sample file or there is no upload.
     """
-    uploaded = st.file_uploader("Chọn file CSV", type="csv")
-    frame = _read_batch_frame(uploaded)
-    if frame is None:
+    st.session_state["batch_upload_signature"] = upload_signature
+    try:
+        frame = reader()
+    except CSV_READ_ERRORS as exc:
+        _clear_batch()
+        st.error(f"Không đọc được file CSV: {exc}")
         return
 
     payloads, missing = csv_to_bookings(frame)
     if missing:
+        _clear_batch()
         st.error("File thiếu cột: " + ", ".join(missing))
         return
     if not payloads:
+        _clear_batch()
         st.error("File không có dòng dữ liệu nào.")
         return
     if len(payloads) > MAX_BATCH_SIZE:
+        _clear_batch()
         st.error(f"Chỉ chấm tối đa {MAX_BATCH_SIZE} dòng mỗi lần; file có {len(payloads)} dòng.")
         return
 
+    st.session_state["batch_frame"] = frame
+    st.session_state["batch_payloads"] = payloads
+    st.session_state["batch_label"] = label
+    st.session_state["batch_scored_payloads"] = None
+    st.session_state["batch_result"] = None
+    st.session_state["batch_error"] = None
+
+
+def _score_batch(client: ApiClient, payloads: list[dict[str, Any]]) -> None:
+    """Score the stored payload once and remember the result or the error.
+
+    The payload is recorded as scored before the call, so a failing API is not retried on every
+    rerun; the user retries with the "Chấm điểm" button.
+
+    Args:
+        client: Client used to call `predict_batch`.
+        payloads: Payloads built from the stored frame, in file order.
+    """
+    st.session_state["batch_scored_payloads"] = payloads
+    st.session_state["batch_result"] = None
+    st.session_state["batch_error"] = None
     try:
         result = client.predict_batch(payloads)
     except ApiError as exc:
-        st.error(str(exc))
+        st.session_state["batch_error"] = str(exc)
+        return
+    st.session_state["batch_result"] = result
+
+
+def render_batch_tab(client: ApiClient) -> None:
+    """Render the CSV tab: choose the file, score it and offer the results as a download.
+
+    The chosen frame lives in `st.session_state`, so it survives reruns triggered by the download
+    button, the sidebar or the health check. `predict_batch` runs when the stored payload differs
+    from the last scored payload, or when the user presses "Chấm điểm".
+
+    Args:
+        client: Client used to score the batch.
+    """
+    uploaded = st.file_uploader("Chọn file CSV", type="csv")
+    upload_signature = _upload_signature(uploaded) if uploaded is not None else None
+    use_sample = st.button("Dùng file mẫu", key="use_sample")
+    score_clicked = st.button("Chấm điểm", key="score_batch")
+    st.button("Xóa kết quả", key="clear_batch", on_click=_clear_batch)
+
+    if use_sample:
+        _load_batch_frame(lambda: pd.read_csv(SAMPLE_CSV), SAMPLE_LABEL, upload_signature)
+    elif uploaded is not None and upload_signature != st.session_state.get("batch_upload_signature"):
+        _load_batch_frame(lambda: pd.read_csv(uploaded), f"file {uploaded.name}", upload_signature)
+
+    frame: pd.DataFrame | None = st.session_state.get("batch_frame")
+    if frame is None:
+        st.caption("Chọn file CSV hoặc dùng file mẫu để bắt đầu.")
+        return
+
+    payloads: list[dict[str, Any]] = st.session_state["batch_payloads"]
+    if score_clicked or payloads != st.session_state.get("batch_scored_payloads"):
+        _score_batch(client, payloads)
+
+    error = st.session_state.get("batch_error")
+    if error:
+        st.error(error)
+
+    label = st.session_state.get("batch_label", "")
+    result: BatchResult | None = st.session_state.get("batch_result")
+    if result is None:
+        st.caption(f"Đã chọn {len(frame)} dòng từ {label} · chưa chấm điểm")
+        st.dataframe(frame)
         return
 
     output = _results_frame(frame, result)
     st.dataframe(output)
     st.metric("Tỉ lệ hủy dự đoán", format_probability(float(output["probability"].mean())))
-    st.caption(f"Ngưỡng quyết định: {format_threshold(result.threshold)} · model {result.model_version}")
+    st.caption(
+        f"{len(output)} dòng từ {label} · ngưỡng quyết định: {format_threshold(result.threshold)}"
+        f" · model {result.model_version}"
+    )
     render_warnings(result.warnings)
     st.download_button(
         "Tải kết quả CSV",
