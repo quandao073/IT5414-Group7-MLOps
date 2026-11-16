@@ -1,0 +1,74 @@
+{
+  "target": "train",
+  "label": "before",
+  "spec": "configs\\model\\champion.yaml",
+  "runs": 2,
+  "wall_seconds": [
+    22.897300899989204,
+    23.20838029999868
+  ],
+  "wall_median": 23.052840599993942,
+  "stages": {},
+  "profiled_total": 31.050351799989585,
+  "functions": [
+    {
+      "name": "_get_outputs (parallel.py:1692)",
+      "cumtime": 80.4239156,
+      "share": 2.5901128630699435
+    },
+    {
+      "name": "_retrieve (parallel.py:1798)",
+      "cumtime": 64.77772540000001,
+      "share": 2.0862155062610834
+    },
+    {
+      "name": "empty (queues.py:374)",
+      "cumtime": 43.4283495,
+      "share": 1.3986427522542457
+    },
+    {
+      "name": "poll (connection.py:253)",
+      "cumtime": 43.4280756,
+      "share": 1.3986339310981515
+    },
+    {
+      "name": "_poll (connection.py:342)",
+      "cumtime": 43.427856600000005,
+      "share": 1.3986268780379671
+    },
+    {
+      "name": "<built-in method _winapi.PeekNamedPipe> (~:0)",
+      "cumtime": 43.420901400000005,
+      "share": 1.3984028805758835
+    },
+    {
+      "name": "fit (model.py:226)",
+      "cumtime": 35.199862800000005,
+      "share": 1.1336381315979747
+    },
+    {
+      "name": "wait (connection.py:1032)",
+      "cumtime": 32.311927700000005,
+      "share": 1.0406300034259466
+    },
+    {
+      "name": "train_with_card (sample_model.py:63)",
+      "cumtime": 31.024697200000002,
+      "share": 0.9991737742568961
+    },
+    {
+      "name": "fit (model.py:303)",
+      "cumtime": 29.3628651,
+      "share": 0.9456532180099115
+    }
+  ],
+  "environment": {
+    "python": "3.12.15",
+    "platform": "Windows-11-10.0.26300-SP0",
+    "pandas": "3.0.6",
+    "numpy": "2.5.3",
+    "scikit-learn": "1.9.1",
+    "lightgbm": "4.7.0",
+    "xgboost": "3.4.1"
+  }
+}

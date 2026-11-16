@@ -1,0 +1,75 @@
+{
+  "target": "train",
+  "label": "before",
+  "spec": "configs\\model\\logistic_regression.yaml",
+  "runs": 3,
+  "wall_seconds": [
+    4.069582900003297,
+    3.8787525999941863,
+    3.87731260000146
+  ],
+  "wall_median": 3.8787525999941863,
+  "stages": {},
+  "profiled_total": 5.950629099999787,
+  "functions": [
+    {
+      "name": "train_with_card (sample_model.py:63)",
+      "cumtime": 5.9488754,
+      "share": 0.9997052916640717
+    },
+    {
+      "name": "fit (model.py:226)",
+      "cumtime": 5.4997074,
+      "share": 0.9242228523367717
+    },
+    {
+      "name": "wrapper (base.py:1381)",
+      "cumtime": 5.4610383,
+      "share": 0.9177245310080232
+    },
+    {
+      "name": "fit (pipeline.py:578)",
+      "cumtime": 5.4511238,
+      "share": 0.916058404648375
+    },
+    {
+      "name": "wrapped (_set_output.py:325)",
+      "cumtime": 4.069717600000001,
+      "share": 0.6839138403030608
+    },
+    {
+      "name": "_fit (pipeline.py:516)",
+      "cumtime": 3.7599771000000004,
+      "share": 0.6318621168978814
+    },
+    {
+      "name": "__call__ (memory.py:330)",
+      "cumtime": 3.7567756,
+      "share": 0.6313241065554118
+    },
+    {
+      "name": "_fit_transform_one_with_callbacks (pipeline.py:1578)",
+      "cumtime": 3.7567633000000002,
+      "share": 0.6313220395470681
+    },
+    {
+      "name": "_fit_transform_one (pipeline.py:1553)",
+      "cumtime": 3.7566808000000003,
+      "share": 0.631308175466714
+    },
+    {
+      "name": "fit_transform (base.py:913)",
+      "cumtime": 3.7267340000000004,
+      "share": 0.6262756319327873
+    }
+  ],
+  "environment": {
+    "python": "3.12.15",
+    "platform": "Windows-11-10.0.26300-SP0",
+    "pandas": "3.0.6",
+    "numpy": "2.5.3",
+    "scikit-learn": "1.9.1",
+    "lightgbm": "4.7.0",
+    "xgboost": "3.4.1"
+  }
+}

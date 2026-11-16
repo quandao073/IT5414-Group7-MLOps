@@ -1,0 +1,74 @@
+{
+  "target": "train",
+  "label": "after",
+  "spec": "configs\\model\\champion.yaml",
+  "runs": 2,
+  "wall_seconds": [
+    22.703116399992723,
+    23.1421238000039
+  ],
+  "wall_median": 22.922620099998312,
+  "stages": {},
+  "profiled_total": 31.42483090001042,
+  "functions": [
+    {
+      "name": "_get_outputs (parallel.py:1692)",
+      "cumtime": 71.7484089,
+      "share": 2.2831756558466068
+    },
+    {
+      "name": "_retrieve (parallel.py:1798)",
+      "cumtime": 57.7690714,
+      "share": 1.8383256089368756
+    },
+    {
+      "name": "empty (queues.py:374)",
+      "cumtime": 37.302267,
+      "share": 1.187031590358936
+    },
+    {
+      "name": "poll (connection.py:253)",
+      "cumtime": 37.301931700000004,
+      "share": 1.187020920452674
+    },
+    {
+      "name": "_poll (connection.py:342)",
+      "cumtime": 37.3016859,
+      "share": 1.1870130986126526
+    },
+    {
+      "name": "<built-in method _winapi.PeekNamedPipe> (~:0)",
+      "cumtime": 37.1461052,
+      "share": 1.182062214374165
+    },
+    {
+      "name": "<built-in method _winapi.ReadFile> (~:0)",
+      "cumtime": 37.005253700000004,
+      "share": 1.1775800422839422
+    },
+    {
+      "name": "get (queues.py:385)",
+      "cumtime": 32.1480057,
+      "share": 1.0230128461881187
+    },
+    {
+      "name": "recv_bytes (connection.py:208)",
+      "cumtime": 32.147826300000006,
+      "share": 1.0230071373268501
+    },
+    {
+      "name": "_recv_bytes (connection.py:310)",
+      "cumtime": 32.147684500000004,
+      "share": 1.0230026249716222
+    }
+  ],
+  "environment": {
+    "python": "3.12.15",
+    "platform": "Windows-11-10.0.26300-SP0",
+    "pandas": "3.0.6",
+    "numpy": "2.5.3",
+    "scikit-learn": "1.9.1",
+    "lightgbm": "4.7.0",
+    "xgboost": "3.4.1"
+  }
+}
