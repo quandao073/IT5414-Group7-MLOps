@@ -37,6 +37,7 @@ dependencies = [
     "typer==0.27.3",
     "uvicorn==0.54.0",
     "xgboost==3.4.1",
+    "pyarrow==26.0.1",
 ]
 
 [dependency-groups]
@@ -52,6 +53,8 @@ dev = [
     "pandas-stubs==3.1.0.261029",
     "types-pyyaml==6.0.12.20261103",
     "dvc==3.67.1",
+    "matplotlib==3.11.2",
+    "snakeviz==2.2.2",
 ]
 
 [tool.ruff]
