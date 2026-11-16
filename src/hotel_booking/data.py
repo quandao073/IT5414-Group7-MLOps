@@ -47,7 +47,10 @@ def load_raw(path: Path) -> pd.DataFrame:
     """
     if not path.exists():
         raise FileNotFoundError(f"{path} not found. Run `dvc pull` or download {RAW_FILE} from {KAGGLE_URL}.")
-    return pd.read_csv(path)
+    frame = pd.read_csv(path, engine="pyarrow")
+    if "reservation_status_date" in frame.columns:
+        frame["reservation_status_date"] = frame["reservation_status_date"].astype(str)
+    return frame
 
 
 def arrival_dates(frame: pd.DataFrame) -> pd.Series:
