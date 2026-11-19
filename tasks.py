@@ -34,6 +34,12 @@ def serve_api(ctx: Context, port: int = 8000, reload: bool = False) -> None:
 
 
 @task
+def serve_frontend(ctx: Context, port: int = 8501) -> None:
+    """Serve the Streamlit frontend locally."""
+    ctx.run(f"uv run streamlit run src/{PROJECT_NAME}/frontend.py --server.port {port}", echo=True, pty=not WINDOWS)
+
+
+@task
 def replay(ctx: Context, api_url: str = "http://localhost:8000", months: str = "", delay: float = 0.0) -> None:
     """Replay the 2017 bookings month by month into the API and release each month's labels."""
     ctx.run(
