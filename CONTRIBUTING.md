@@ -26,7 +26,7 @@ Sau đó mở Pull Request vào `develop`:
 
 - Tiêu đề PR theo cùng quy ước với commit message (mục 2).
 - Phần mô tả ghi mã task trong kế hoạch và tóm tắt thay đổi.
-- PR được merge khi CI xanh và có ít nhất 1 thành viên approve. Dùng **Squash and merge** để mỗi PR thành một commit trên `develop`.
+- PR được merge khi CI xanh và có ít nhất 1 thành viên approve. Dùng **Create a merge commit** để giữ nguyên các commit của PR và thêm một commit `Merge pull request #N ...` trên `develop`.
 
 Trưởng nhóm định kỳ mở PR từ `develop` vào `main`.
 
