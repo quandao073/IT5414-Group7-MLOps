@@ -1,0 +1,25 @@
+# Local stack: `docker compose up -d --build`.
+name: hotel-booking
+
+services:
+  # Prediction API (1.4.1). Serves models/model.joblib until the registry loader lands (1.4.4).
+  api:
+    build:
+      context: .
+      dockerfile: dockerfiles/api.dockerfile
+    ports: ["8000:8000"]
+    volumes:
+      - ./models:/app/models:ro
+    restart: unless-stopped
+
+  # Streamlit frontend (1.4.3); it calls the API over the compose network.
+  frontend:
+    build:
+      context: .
+      dockerfile: dockerfiles/frontend.dockerfile
+    ports: ["8501:8501"]
+    environment:
+      API_URL: http://api:8000
+    depends_on:
+      api: {condition: service_healthy}
+    restart: unless-stopped
