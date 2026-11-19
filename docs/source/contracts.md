@@ -138,6 +138,9 @@ Danh sách đầy đủ trong `.env.example` ở gốc repo. Bí mật (mật kh
 | `MODEL_PATH` | `models/model.joblib` (trong container: `/app/models/model.joblib`) | API |
 | `MODEL_CARD_PATH` | `models/model_card.json` (trong container: `/app/models/model_card.json`) | API |
 | `API_URL` | `http://localhost:8000` | Replay, Frontend, load test |
+| `MLFLOW_TRACKING_URI` | `https://dagshub.com/quandao073/IT5414-Group7-MLOps.mlflow` | Training, API (Registry) |
+| `MLFLOW_TRACKING_USERNAME` | Tên tài khoản DagsHub của mỗi người | Training, API (Registry) |
+| `MLFLOW_TRACKING_PASSWORD` | Access token DagsHub (bí mật, chỉ đặt trong `.env`) | Training, API (Registry) |
 
 ## C9. Bảng log dự đoán và nhãn
 
