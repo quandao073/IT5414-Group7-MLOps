@@ -66,5 +66,5 @@ line-length = 120
 omit = ["tests/*"]
 
 [[tool.mypy.overrides]]
-module = ["sklearn.*", "joblib"]
+module = ["sklearn.*", "joblib", "airflow.*"]
 ignore_missing_imports = true
