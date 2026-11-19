@@ -1,0 +1,10 @@
+# Baseline tuned in IT3190 (notebook 03): log1p on skewed counts, recency weights with a one-year half-life.
+name: Logistic Regression
+encoding: onehot
+half_life_days: 365
+booking_weights: false
+pipeline:
+  log_skewed: true
+params:
+  class_weight: null
+  C: 0.01

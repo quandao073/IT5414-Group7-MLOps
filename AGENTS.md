@@ -13,8 +13,25 @@
     * To lint code, use `uv run ruff check . --fix`.
 * The project uses `invoke` for task management. To see available tasks, use `uv run invoke --list` or refer to the
     `tasks.py` file.
+* The project uses `dvc` to version data. The raw dataset is tracked by `data/raw/hotel_bookings.csv.dvc`;
+    fetch it with `uv run dvc pull` and never commit files under `data/` to git.
 * The project uses `pre-commit` for managing pre-commit hooks. To run all hooks on all files, use
     `uv run pre-commit run --all-files`. For more information, refer to the `.pre-commit-config.yaml` file.
+* The project has a Streamlit frontend. Run it with `uv run invoke serve-frontend` (needs the API from
+  `uv run invoke serve-api` and `API_URL` set, default `http://localhost:8000`).
+* Serving (FastAPI) commands:
+    * `uv run invoke sample-model [--spec configs/model/<name>.yaml]` trains a model on `data/processed` and saves
+      `models/model.joblib` with `models/model_card.json`.
+    * `uv run invoke serve-api [--reload]` serves the API on port 8000; Swagger UI at `/docs`.
+    * `uv run invoke replay [--months 2017-01,2017-02] [--delay 0.5]` replays the 2017 bookings into the API.
+* Contracts between modules (API schema, model artifact, replay data, environment variables, Docker) are in
+    `docs/source/contracts.md`; follow them, or change them through a PR that updates that file.
+* Profiling commands:
+    * `uv run invoke profile --target {preprocess,train} --label <label> [--spec configs/model/<name>.yaml] [--runs N]`
+      writes `reports/profile/<stem>.json` and a gitignored `<stem>.prof`; the summaries are committed.
+    * `uv run invoke profile-figures` renders the before/after PNGs into `reports/figures/`.
+    * `uv run snakeviz reports/profile/<stem>.prof` opens one raw profile in the browser.
+    * `reports/profiling.md` records the measured before/after numbers and which optimisations were rejected.
 
 # Code style
 
