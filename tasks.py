@@ -50,6 +50,31 @@ def replay(ctx: Context, api_url: str = "http://localhost:8000", months: str = "
 
 
 @task
+def profile(
+    ctx: Context,
+    target: str = "preprocess",
+    label: str = "before",
+    spec: str = "configs/model/logistic_regression.yaml",
+    runs: int = 3,
+) -> None:
+    """Profile preprocessing or training and write a JSON summary under reports/profile.
+
+    The file name is `preprocess-<label>.json` for preprocessing and `train-<spec>-<label>.json` for training.
+    """
+    ctx.run(
+        f"uv run src/{PROJECT_NAME}/profiling.py --target {target} --label {label} --spec {spec} --runs {runs}",
+        echo=True,
+        pty=not WINDOWS,
+    )
+
+
+@task
+def profile_figures(ctx: Context) -> None:
+    """Render the before/after profiling figures into reports/figures."""
+    ctx.run(f"uv run src/{PROJECT_NAME}/profiling.py --figures", echo=True, pty=not WINDOWS)
+
+
+@task
 def test(ctx: Context) -> None:
     """Run tests."""
     ctx.run("uv run coverage run -m pytest tests/", echo=True, pty=not WINDOWS)

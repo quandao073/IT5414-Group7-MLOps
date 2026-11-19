@@ -8,6 +8,9 @@ data/stream/
 models/*
 !models/.gitkeep
 
+# profiling artifacts: raw pstats dumps are large, the JSON summaries are committed
+reports/profile/*.prof
+
 # MLflow and Hydra run outputs
 mlruns/
 mlartifacts/

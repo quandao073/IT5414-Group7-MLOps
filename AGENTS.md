@@ -26,6 +26,12 @@
     * `uv run invoke replay [--months 2017-01,2017-02] [--delay 0.5]` replays the 2017 bookings into the API.
 * Contracts between modules (API schema, model artifact, replay data, environment variables, Docker) are in
     `docs/source/contracts.md`; follow them, or change them through a PR that updates that file.
+* Profiling commands:
+    * `uv run invoke profile --target {preprocess,train} --label <label> [--spec configs/model/<name>.yaml] [--runs N]`
+      writes `reports/profile/<stem>.json` and a gitignored `<stem>.prof`; the summaries are committed.
+    * `uv run invoke profile-figures` renders the before/after PNGs into `reports/figures/`.
+    * `uv run snakeviz reports/profile/<stem>.prof` opens one raw profile in the browser.
+    * `reports/profiling.md` records the measured before/after numbers and which optimisations were rejected.
 
 # Code style
 

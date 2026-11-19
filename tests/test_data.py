@@ -83,6 +83,8 @@ def test_preprocess_writes_splits_and_schema(raw_bookings: pd.DataFrame, tmp_pat
     for name in config.SPLITS:
         split = data.read_split(tmp_path / "processed", name)
         assert len(split) > 0 and split[config.TIME_COLUMN].is_monotonic_increasing
+        assert split[config.TIME_COLUMN].dtype.kind == "M"
+        assert all(split[column].dtype == "str" for column in config.RAW_CATEGORICAL_INPUTS)
     schema = json.loads((tmp_path / "processed" / data.SCHEMA_FILE).read_text(encoding="utf-8"))
     assert set(schema["numeric"]) == set(config.RAW_NUMERIC_INPUTS + [config.GROUP_SIZE_COLUMN])
 
