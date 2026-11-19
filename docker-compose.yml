@@ -10,6 +10,28 @@ x-s3-env: &s3-env
   AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-mlops}
   AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-mlops-secret}
 
+# Airflow 3 with LocalExecutor on the shared PostgreSQL. The image has no project dependencies: DAGs only
+# orchestrate and call the services (or run project images), so Airflow and the project never share a venv.
+x-airflow: &airflow
+  image: apache/airflow:3.4.0
+  user: "50000:0"
+  environment:
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-mlops}:${POSTGRES_PASSWORD:-mlops}@postgres:5432/airflow
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
+    AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET:-local-only-jwt-secret}
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    # Local demo: no login, every visitor of http://localhost:8080 is admin.
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - airflow-logs:/opt/airflow/logs
+  depends_on: &airflow-depends
+    postgres: {condition: service_healthy}
+    airflow-init: {condition: service_completed_successfully}
+  restart: unless-stopped
+
 services:
   # Prediction API (1.4.1). Serves models/model.joblib until the registry loader lands (1.4.4).
   api:
@@ -115,6 +137,47 @@ services:
       retries: 30
     restart: unless-stopped
 
+  # One-shot job: create or upgrade the Airflow metadata database.
+  airflow-init:
+    <<: *airflow
+    command: db migrate
+    depends_on:
+      postgres: {condition: service_healthy}
+    restart: "no"
+
+  # Airflow UI and REST/execution API (Airflow 3 replaces the webserver with the api-server).
+  airflow-apiserver:
+    <<: *airflow
+    command: api-server
+    ports: ["8080:8080"]
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/version"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+
+  airflow-scheduler:
+    <<: *airflow
+    command: scheduler
+    depends_on:
+      <<: *airflow-depends
+      airflow-apiserver: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname \"$${HOSTNAME}\""]
+      interval: 30s
+      timeout: 30s
+      retries: 10
+
+  airflow-dag-processor:
+    <<: *airflow
+    command: dag-processor
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type DagProcessorJob --hostname \"$${HOSTNAME}\""]
+      interval: 30s
+      timeout: 30s
+      retries: 10
+
 volumes:
   postgres-data:
   seaweedfs-data:
+  airflow-logs:
