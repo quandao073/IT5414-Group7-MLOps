@@ -127,7 +127,18 @@ Giao diện Streamlit đọc `API_URL` (mặc định `http://localhost:8000`) v
 
 Kết quả profiling (số đo trước/sau, nút thắt, các tối ưu đã thử) nằm trong [reports/profiling.md](reports/profiling.md); hình so sánh nằm trong `reports/figures/`.
 
-DVC remote chưa được cấu hình. Trong lúc chờ, tải `hotel_bookings.csv` từ Kaggle vào `data/raw/` thay cho `dvc pull`. Unit test chạy được cả khi chưa có dữ liệu thật: các test cần file này sẽ tự bỏ qua.
+**Kết nối DagsHub** (MLflow tracking và DVC remote dùng chung, repo [dagshub.com/quandao073/IT5414-Group7-MLOps](https://dagshub.com/quandao073/IT5414-Group7-MLOps)). Làm một lần trên mỗi máy, trước `dvc pull`:
+
+1. Tạo tài khoản DagsHub, nhờ trưởng nhóm thêm làm collaborator, rồi tạo access token tại [dagshub.com/user/settings/tokens](https://dagshub.com/user/settings/tokens).
+2. Sao chép `.env.example` thành `.env`, điền `MLFLOW_TRACKING_USERNAME` (tên tài khoản) và `MLFLOW_TRACKING_PASSWORD` (token). Training đọc các biến này để log lên MLflow.
+3. Lưu tài khoản cho DVC vào `.dvc/config.local` (file này không được commit):
+
+   ```bash
+   uv run dvc remote modify origin --local user <dagshub-username>
+   uv run dvc remote modify origin --local password <dagshub-token>
+   ```
+
+Unit test chạy được cả khi chưa có dữ liệu thật: các test cần file này sẽ tự bỏ qua.
 
 Trên macOS, XGBoost và LightGBM cần OpenMP: chạy `brew install libomp` trước `uv sync`.
 
