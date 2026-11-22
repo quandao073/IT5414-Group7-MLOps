@@ -140,6 +140,8 @@ Kết quả profiling (số đo trước/sau, nút thắt, các tối ưu đã t
 
 **Pipeline dữ liệu** (`dvc.yaml`): `prepare` chạy `data.py` sinh `data/processed`; `validate` kiểm tra từng split bằng pandera (đủ cột, không có cột leakage, khoảng giá trị, null, ngày đến nằm đúng cửa sổ của split) và dừng pipeline nếu có lỗi, kết quả ở `reports/data_validation.json`; `drift` so dữ liệu train với từng tháng 2017 và City Hotel với Resort Hotel bằng Evidently, ghi report HTML vào `reports/drift/html/` và bảng tỉ lệ cột bị drift vào `reports/drift/summary.csv`. Từng bước cũng chạy riêng được bằng `uv run invoke preprocess-data`, `validate-data`, `drift-report`. Sau khi `dvc repro`, chạy `uv run dvc push` để người khác `dvc pull` được cả dữ liệu đã xử lý. Kết quả và nhận xét drift: [reports/drift.md](reports/drift.md).
 
+**Drift service** (`uv run invoke serve-drift`, cổng 8001): đọc input mà API đã log trong PostgreSQL (`DATABASE_URL`), tính drift theo tháng replay hoặc khoảng thời gian và expose `/metrics` cho Prometheus. DAG Airflow `monitor_drift` gọi service này định kỳ và kích hoạt DAG `retrain` khi tỉ lệ cột bị drift vượt ngưỡng. Chi tiết endpoint và cấu hình: mục C14 trong [docs/source/contracts.md](docs/source/contracts.md).
+
 Unit test chạy được cả khi chưa có dữ liệu thật: các test cần file này sẽ tự bỏ qua.
 
 Trên macOS, XGBoost và LightGBM cần OpenMP: chạy `brew install libomp` trước `uv sync`.

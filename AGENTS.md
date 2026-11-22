@@ -20,6 +20,8 @@
     * `uv run invoke preprocess-data` writes `data/processed`.
     * `uv run invoke validate-data` checks the splits with pandera and writes `reports/data_validation.json`.
     * `uv run invoke drift-report` writes the Evidently reports and `summary.csv/json` into `reports/drift/`.
+* `uv run invoke serve-drift [--reload]` serves the drift detection service on port 8001 (needs `DATABASE_URL`);
+    the Airflow DAG `airflow/dags/monitor_drift.py` calls it. See contract C14 in `docs/source/contracts.md`.
 * The project uses `pre-commit` for managing pre-commit hooks. To run all hooks on all files, use
     `uv run pre-commit run --all-files`. For more information, refer to the `.pre-commit-config.yaml` file.
 * The project has a Streamlit frontend. Run it with `uv run invoke serve-frontend` (needs the API from

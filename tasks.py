@@ -50,6 +50,13 @@ def serve_api(ctx: Context, port: int = 8000, reload: bool = False) -> None:
 
 
 @task
+def serve_drift(ctx: Context, port: int = 8001, reload: bool = False) -> None:
+    """Serve the drift detection service locally (needs DATABASE_URL); Swagger UI at /docs."""
+    flags = " --reload" if reload else ""
+    ctx.run(f"uv run uvicorn {PROJECT_NAME}.drift_service:app --port {port}{flags}", echo=True, pty=not WINDOWS)
+
+
+@task
 def serve_frontend(ctx: Context, port: int = 8501) -> None:
     """Serve the Streamlit frontend locally."""
     ctx.run(f"uv run streamlit run src/{PROJECT_NAME}/frontend.py --server.port {port}", echo=True, pty=not WINDOWS)
@@ -107,6 +114,11 @@ def docker_build(ctx: Context, progress: str = "plain") -> None:
     )
     ctx.run(
         f"docker build -t api:latest . -f dockerfiles/api.dockerfile --progress={progress}", echo=True, pty=not WINDOWS
+    )
+    ctx.run(
+        f"docker build -t drift:latest . -f dockerfiles/drift.dockerfile --progress={progress}",
+        echo=True,
+        pty=not WINDOWS,
     )
 
 
