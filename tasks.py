@@ -15,6 +15,22 @@ def preprocess_data(ctx: Context) -> None:
 
 
 @task
+def validate_data(ctx: Context) -> None:
+    """Validate the processed splits with pandera and write reports/data_validation.json."""
+    ctx.run(
+        f"uv run src/{PROJECT_NAME}/validation.py data/processed reports/data_validation.json",
+        echo=True,
+        pty=not WINDOWS,
+    )
+
+
+@task
+def drift_report(ctx: Context) -> None:
+    """Write the Evidently drift reports (each 2017 month and City vs Resort Hotel) into reports/drift."""
+    ctx.run(f"uv run src/{PROJECT_NAME}/drift.py data/processed reports/drift", echo=True, pty=not WINDOWS)
+
+
+@task
 def train(ctx: Context) -> None:
     """Train model."""
     ctx.run(f"uv run src/{PROJECT_NAME}/train.py", echo=True, pty=not WINDOWS)

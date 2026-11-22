@@ -115,7 +115,7 @@ git switch develop
 uv sync                     # tạo .venv với Python 3.12 theo uv.lock
 uv run pre-commit install   # cài git hook (ruff, kiểm tra file)
 uv run dvc pull             # tải data/raw/hotel_bookings.csv
-uv run invoke preprocess-data
+uv run dvc repro            # pipeline dữ liệu: prepare → validate (pandera) → drift (Evidently)
 uv run invoke test          # chạy test kèm coverage
 uv run invoke serve-api        # cửa sổ 1: API tại http://localhost:8000
 uv run invoke serve-frontend   # cửa sổ 2: giao diện tại http://localhost:8501
@@ -137,6 +137,8 @@ Kết quả profiling (số đo trước/sau, nút thắt, các tối ưu đã t
    uv run dvc remote modify origin --local user <dagshub-username>
    uv run dvc remote modify origin --local password <dagshub-token>
    ```
+
+**Pipeline dữ liệu** (`dvc.yaml`): `prepare` chạy `data.py` sinh `data/processed`; `validate` kiểm tra từng split bằng pandera (đủ cột, không có cột leakage, khoảng giá trị, null, ngày đến nằm đúng cửa sổ của split) và dừng pipeline nếu có lỗi, kết quả ở `reports/data_validation.json`; `drift` so dữ liệu train với từng tháng 2017 và City Hotel với Resort Hotel bằng Evidently, ghi report HTML vào `reports/drift/html/` và bảng tỉ lệ cột bị drift vào `reports/drift/summary.csv`. Từng bước cũng chạy riêng được bằng `uv run invoke preprocess-data`, `validate-data`, `drift-report`. Sau khi `dvc repro`, chạy `uv run dvc push` để người khác `dvc pull` được cả dữ liệu đã xử lý. Kết quả và nhận xét drift: [reports/drift.md](reports/drift.md).
 
 Unit test chạy được cả khi chưa có dữ liệu thật: các test cần file này sẽ tự bỏ qua.
 
