@@ -208,7 +208,7 @@ có `DATABASE_URL` thì API vẫn chạy, chỉ không ghi log.
 | `api` | 8000 | `http://api:8000` | API dự đoán, mount `./models` vào `/app/models` |
 | `frontend` | 8501 | – | Streamlit, gọi `API_URL=http://api:8000` |
 | `mlflow` | 5000 | `http://mlflow:5000` | Tracking + Model Registry; artifact đi qua server (`--serve-artifacts`) nên client không cần key S3 |
-| `postgres` | 5432 | `postgres:5432` | Database `mlflow`, `airflow`, `hotel_booking` (bảng C9) |
+| `postgres` | 5432 | `postgres:5432` | Database `mlflow`, `airflow`, `hotel` (bảng C9, `DATABASE_URL=...@postgres:5432/hotel`) |
 | `seaweedfs` | 8333 | `http://seaweedfs:8333` | S3: bucket `mlflow` (artifact), `dvc` (DVC remote `local`) |
 | `storage-init` | – | – | Chạy một lần, tạo bucket |
 
