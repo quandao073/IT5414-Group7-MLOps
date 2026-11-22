@@ -1,0 +1,83 @@
+{
+  "2017-01": {
+    "reference_rows": 78586,
+    "current_rows": 3673,
+    "columns": 22,
+    "drifted_columns": 14,
+    "drift_share": 0.6364,
+    "dataset_drift": true,
+    "drifted": "adr, adults, agent, company, customer_type, days_in_waiting_list, lead_time, market_segment, meal, previous_bookings_not_canceled, rooms_in_booking, stays_in_week_nights, stays_in_weekend_nights, total_of_special_requests"
+  },
+  "2017-02": {
+    "reference_rows": 78586,
+    "current_rows": 4168,
+    "columns": 22,
+    "drifted_columns": 11,
+    "drift_share": 0.5,
+    "dataset_drift": true,
+    "drifted": "adr, agent, company, customer_type, days_in_waiting_list, lead_time, market_segment, previous_cancellations, rooms_in_booking, stays_in_week_nights, total_of_special_requests"
+  },
+  "2017-03": {
+    "reference_rows": 78586,
+    "current_rows": 4948,
+    "columns": 22,
+    "drifted_columns": 9,
+    "drift_share": 0.4091,
+    "dataset_drift": false,
+    "drifted": "adr, agent, company, customer_type, days_in_waiting_list, lead_time, market_segment, previous_cancellations, stays_in_week_nights"
+  },
+  "2017-04": {
+    "reference_rows": 78586,
+    "current_rows": 5653,
+    "columns": 22,
+    "drifted_columns": 11,
+    "drift_share": 0.5,
+    "dataset_drift": true,
+    "drifted": "adr, adults, agent, company, days_in_waiting_list, lead_time, previous_cancellations, rooms_in_booking, stays_in_week_nights, stays_in_weekend_nights, total_of_special_requests"
+  },
+  "2017-05": {
+    "reference_rows": 78586,
+    "current_rows": 6305,
+    "columns": 22,
+    "drifted_columns": 9,
+    "drift_share": 0.4091,
+    "dataset_drift": false,
+    "drifted": "adr, agent, company, customer_type, days_in_waiting_list, lead_time, previous_cancellations, rooms_in_booking, total_of_special_requests"
+  },
+  "2017-06": {
+    "reference_rows": 78586,
+    "current_rows": 5639,
+    "columns": 22,
+    "drifted_columns": 10,
+    "drift_share": 0.4545,
+    "dataset_drift": false,
+    "drifted": "adr, agent, company, customer_type, days_in_waiting_list, lead_time, previous_cancellations, rooms_in_booking, stays_in_week_nights, total_of_special_requests"
+  },
+  "2017-07": {
+    "reference_rows": 78586,
+    "current_rows": 5310,
+    "columns": 22,
+    "drifted_columns": 16,
+    "drift_share": 0.7273,
+    "dataset_drift": true,
+    "drifted": "adr, adults, agent, company, customer_type, days_in_waiting_list, deposit_type, lead_time, market_segment, meal, previous_cancellations, reserved_room_type, rooms_in_booking, stays_in_week_nights, stays_in_weekend_nights, total_of_special_requests"
+  },
+  "2017-08": {
+    "reference_rows": 78586,
+    "current_rows": 4923,
+    "columns": 22,
+    "drifted_columns": 17,
+    "drift_share": 0.7727,
+    "dataset_drift": true,
+    "drifted": "adr, adults, agent, children, company, customer_type, days_in_waiting_list, deposit_type, lead_time, market_segment, meal, previous_cancellations, reserved_room_type, rooms_in_booking, stays_in_week_nights, stays_in_weekend_nights, total_of_special_requests"
+  },
+  "city_to_resort": {
+    "reference_rows": 51714,
+    "current_rows": 26872,
+    "columns": 21,
+    "drifted_columns": 15,
+    "drift_share": 0.7143,
+    "dataset_drift": true,
+    "drifted": "adr, adults, agent, company, days_in_waiting_list, deposit_type, distribution_channel, lead_time, market_segment, meal, previous_cancellations, reserved_room_type, rooms_in_booking, stays_in_week_nights, stays_in_weekend_nights"
+  }
+}

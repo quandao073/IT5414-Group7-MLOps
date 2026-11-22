@@ -27,6 +27,7 @@
 | C11 | [Service trong docker compose](#c11-docker-compose) | Đề xuất, đã có `docker-compose.yml` | Platform, cả nhóm |
 | C12 | [Docker image](#c12-docker) | Đề xuất, đã có Dockerfile | Platform, Training |
 | C13 | Checklist demo | Sẽ bổ sung | Cả nhóm |
+| C14 | [Drift service và DAG `monitor_drift`](#c14-drift-service) | Đề xuất, đã có code, chờ API ghi log (C9) | Platform (compose, Grafana), Training (DAG `retrain`) |
 
 ## C1. API
 
@@ -143,6 +144,10 @@ Danh sách đầy đủ trong `.env.example` ở gốc repo. Bí mật (mật kh
 | `MLFLOW_TRACKING_PASSWORD` | Access token DagsHub (bí mật, chỉ đặt trong `.env`) | Training, API (Registry) |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD` | `mlops`, `mlops` (chỉ dùng local) | docker compose: PostgreSQL, MLflow, Airflow |
 | `S3_ACCESS_KEY`, `S3_SECRET_KEY` | `mlops`, `mlops-secret` (chỉ dùng local) | docker compose: SeaweedFS, MLflow; DVC remote `local` |
+| `DATABASE_URL` | Không có (không ghi/đọc log) | API (ghi log, C9), Drift service (đọc log, C14) |
+| `REFERENCE_DIR` | `data/processed` (trong container: `/app/data/processed`) | Drift service |
+| `DRIFT_MIN_ROWS` | `100` | Drift service |
+| `DRIFT_SERVICE_URL` | `http://drift:8001` | DAG `monitor_drift` |
 
 ## C9. Bảng log dự đoán và nhãn
 
@@ -220,10 +225,63 @@ có `DATABASE_URL` thì API vẫn chạy, chỉ không ghi log.
 | `train:latest` | `dockerfiles/train.dockerfile` | `docker run --rm -v ./data:/app/data -v ./models:/app/models train:latest` |
 | `hotel-booking-frontend` | `dockerfiles/frontend.dockerfile` | `docker compose up -d frontend` |
 | `hotel-booking-mlflow` | `dockerfiles/mlflow.dockerfile` | `docker compose up -d mlflow` (image MLflow chính thức + `psycopg2`, `boto3`) |
+| `drift:latest` | `dockerfiles/drift.dockerfile` | `docker run --rm -p 8001:8001 -v ./data/processed:/app/data/processed:ro -e DATABASE_URL=... drift:latest` |
 
-- Build cả hai: `uv run invoke docker-build`.
+- Build tất cả: `uv run invoke docker-build`.
 - Image dựa trên `python:3.12-slim-bookworm` (có `libgomp1` cho LightGBM/XGBoost), multi-stage với `uv sync --frozen
   --no-dev`, nên chỉ cài dependency chính trong `uv.lock`.
 - Mô hình **không** đóng gói trong image API mà được mount vào `/app/models` (sau này nạp từ MLflow Registry).
 - Image train chạy `python -m hotel_booking.train` và có sẵn `configs/`; Training giữ cho `train.py` chạy được bằng
   lệnh này, dữ liệu mount vào `/app/data`.
+
+## C14. Drift service
+
+Service FastAPI riêng (`src/hotel_booking/drift_service.py`, cổng 8001), đọc bảng `prediction_logs` (C9) và so đầu
+vào đã log với dữ liệu tham chiếu `train.csv` bằng Evidently, cùng cách tính với báo cáo offline
+`reports/drift/` (`drift.column_drift`). Chạy local: `uv run invoke serve-drift`, Swagger UI tại `/docs`.
+
+| Endpoint | Ý nghĩa |
+|---|---|
+| `GET /health` | `status`, `reference_rows`, `database` (có `DATABASE_URL` hay không) |
+| `GET /drift?month=YYYY-MM` | Drift của một tháng replay (`replay_month`) |
+| `GET /drift?start=...&end=...` | Drift theo `created_at` trong `[start, end)`, thời gian ISO 8601 |
+| `GET /drift/latest` | Drift của tháng replay mới nhất; DAG `monitor_drift` gọi endpoint này |
+| `GET /drift/report?...` | Report HTML của Evidently, cùng tham số với `/drift` |
+| `GET /metrics` | Metrics Prometheus |
+
+Response của `/drift`: `window`, `rows`, `reference_rows`, `columns`, `drifted_columns`, `drift_share` (tỉ lệ cột
+bị drift, 0–1), `dataset_drift` (`drift_share >= 0.5`) và `details` (mỗi cột: `column`, `method`, `threshold`,
+`score`, `drifted`).
+
+- Không so các cột lịch (`arrival_date_year`, `_month`, `_week_number`, `_day_of_month`) vì chúng luôn khác khi so
+  hai giai đoạn; `agent`, `company` được so như biến phân loại.
+- Cửa sổ có ít hơn `DRIFT_MIN_ROWS` dòng trả `404`; không có `DATABASE_URL` thì các endpoint `/drift*` trả `503`;
+  thiếu hoặc trộn `month` với `start`/`end` trả `422`.
+- Metrics (label `window` là tháng replay, hoặc `custom` cho khoảng `created_at`): `drift_share`,
+  `drift_drifted_columns`, `drift_rows`, `drift_dataset_drift`, `drift_last_check_timestamp_seconds` và
+  `drift_checks_total`. Grafana cảnh báo theo `drift_share`.
+
+**Trong docker compose** (Platform thêm khi gộp compose):
+
+```yaml
+  drift:
+    build:
+      context: .
+      dockerfile: dockerfiles/drift.dockerfile
+    ports: ["8001:8001"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mlops}:${POSTGRES_PASSWORD:-mlops}@postgres:5432/hotel
+    volumes:
+      - ./data/processed:/app/data/processed:ro
+    depends_on:
+      postgres: {condition: service_healthy}
+    restart: unless-stopped
+```
+
+Prometheus scrape `drift:8001/metrics`.
+
+**DAG `monitor_drift`** (`airflow/dags/monitor_drift.py`): chạy theo lịch `MONITOR_DRIFT_SCHEDULE` (mặc định mỗi 10
+phút), gọi `GET /drift/latest`; nếu `drift_share` đạt Airflow Variable `drift_share_threshold` (mặc định 0.5) và
+tháng đó chưa kích hoạt lần nào (Variable `monitor_drift_last_window`) thì trigger DAG có id **`retrain`** với
+`conf = {"reason": "drift", "window": "YYYY-MM", "drift_share": "..."}`. Training đặt đúng id `retrain` cho DAG
+huấn luyện lại; cho tới khi có DAG đó, bước `trigger_retrain` sẽ báo lỗi.

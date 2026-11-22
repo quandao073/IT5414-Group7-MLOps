@@ -15,6 +15,13 @@
     `tasks.py` file.
 * The project uses `dvc` to version data. The raw dataset is tracked by `data/raw/hotel_bookings.csv.dvc`;
     fetch it with `uv run dvc pull` and never commit files under `data/` to git.
+* `dvc.yaml` defines the data pipeline `prepare → validate → drift`; run it with `uv run dvc repro` and share the
+    outputs with `uv run dvc push`. Each stage also has an invoke task:
+    * `uv run invoke preprocess-data` writes `data/processed`.
+    * `uv run invoke validate-data` checks the splits with pandera and writes `reports/data_validation.json`.
+    * `uv run invoke drift-report` writes the Evidently reports and `summary.csv/json` into `reports/drift/`.
+* `uv run invoke serve-drift [--reload]` serves the drift detection service on port 8001 (needs `DATABASE_URL`);
+    the Airflow DAG `airflow/dags/monitor_drift.py` calls it. See contract C14 in `docs/source/contracts.md`.
 * The project uses `pre-commit` for managing pre-commit hooks. To run all hooks on all files, use
     `uv run pre-commit run --all-files`. For more information, refer to the `.pre-commit-config.yaml` file.
 * The project has a Streamlit frontend. Run it with `uv run invoke serve-frontend` (needs the API from

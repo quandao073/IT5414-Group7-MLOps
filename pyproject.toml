@@ -39,6 +39,8 @@ dependencies = [
     "uvicorn==0.54.0",
     "xgboost==3.4.1",
     "pyarrow==26.0.1",
+    "pandera==0.36.0",
+    "evidently==0.7.23",
 ]
 
 [dependency-groups]
@@ -66,5 +68,5 @@ line-length = 120
 omit = ["tests/*"]
 
 [[tool.mypy.overrides]]
-module = ["sklearn.*", "joblib"]
+module = ["sklearn.*", "joblib", "airflow.*", "evidently.*"]
 ignore_missing_imports = true
