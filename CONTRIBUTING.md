@@ -25,7 +25,8 @@ git push -u origin feat/predict-endpoint
 Sau đó mở Pull Request vào `develop`:
 
 - Tiêu đề PR theo cùng quy ước với commit message (mục 2).
-- Phần mô tả ghi mã task trong kế hoạch và tóm tắt thay đổi.
+- Phần mô tả ghi mã task trong kế hoạch và tóm tắt thay đổi, theo mẫu tự điền sẵn từ `.github/pull_request_template.md`.
+- Gắn một label `area/*` theo mảng của task (`area/data`, `area/train`, `area/serving`, `area/frontend`, `area/monitoring`, `area/platform`). Người phụ trách mảng được tự động thêm làm reviewer theo `.github/CODEOWNERS`.
 - PR được merge khi CI xanh và có ít nhất 1 thành viên approve. Dùng **Create a merge commit** để giữ nguyên các commit của PR và thêm một commit `Merge pull request #N ...` trên `develop`.
 
 Trưởng nhóm định kỳ mở PR từ `develop` vào `main`.

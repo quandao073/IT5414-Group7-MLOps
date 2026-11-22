@@ -1,0 +1,41 @@
+# Reviewers requested automatically for each area. The last matching pattern wins.
+
+# Platform: repo, CI/CD, docker compose, MLflow/MinIO, Airflow, monitoring
+*                                   @quandao073
+
+# Data: preprocessing, DVC, validation, drift
+/src/hotel_booking/data.py          @PhamNhatAnh2003
+/configs/data/                      @PhamNhatAnh2003
+/data/                              @PhamNhatAnh2003
+/tests/test_data.py                 @PhamNhatAnh2003
+
+# Training: model, features, train, evaluate, Hydra configs, registry
+/src/hotel_booking/model.py         @hoangtung386
+/src/hotel_booking/features.py      @hoangtung386
+/src/hotel_booking/train.py         @hoangtung386
+/src/hotel_booking/evaluate.py      @hoangtung386
+/configs/model/                     @hoangtung386
+/configs/train/                     @hoangtung386
+/configs/hpo/                       @hoangtung386
+/tests/test_model.py                @hoangtung386
+/tests/test_features.py             @hoangtung386
+/tests/test_evaluate.py             @hoangtung386
+
+# Serving: API, schemas, sample model, replay, Dockerfiles
+/src/hotel_booking/api.py           @kai-6868
+/src/hotel_booking/schemas.py       @kai-6868
+/src/hotel_booking/sample_model.py  @kai-6868
+/src/hotel_booking/replay.py        @kai-6868
+/dockerfiles/                       @kai-6868
+/tests/test_api.py                  @kai-6868
+/tests/test_replay.py               @kai-6868
+
+# Frontend and quality: Streamlit, API client, profiling, load test
+/src/hotel_booking/frontend.py      @NDQ2911
+/src/hotel_booking/api_client.py    @NDQ2911
+/src/hotel_booking/profiling.py     @NDQ2911
+/tests/test_frontend.py             @NDQ2911
+/tests/test_api_client.py           @NDQ2911
+/tests/test_profiling.py            @NDQ2911
+/tests/performance/                 @NDQ2911
+/reports/profiling.md               @NDQ2911

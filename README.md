@@ -1,5 +1,8 @@
 # Hotel Booking Cancellation — MLOps Pipeline
 
+[![Unit Tests](https://github.com/quandao073/IT5414-Group7-MLOps/actions/workflows/tests.yaml/badge.svg?branch=develop)](https://github.com/quandao073/IT5414-Group7-MLOps/actions/workflows/tests.yaml)
+[![Code linting](https://github.com/quandao073/IT5414-Group7-MLOps/actions/workflows/linting.yaml/badge.svg?branch=develop)](https://github.com/quandao073/IT5414-Group7-MLOps/actions/workflows/linting.yaml)
+
 > Dự án môn **IT5414 – Vận hành hệ thống học máy** · Nhóm `07`
 > Dự báo khả năng một đặt phòng khách sạn bị hủy, được xây dựng và vận hành như một hệ thống học máy hoàn chỉnh: dữ liệu → huấn luyện → triển khai → giám sát.
 
