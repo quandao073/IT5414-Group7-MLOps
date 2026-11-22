@@ -144,6 +144,7 @@ Danh sách đầy đủ trong `.env.example` ở gốc repo. Bí mật (mật kh
 | `MLFLOW_TRACKING_PASSWORD` | Access token DagsHub (bí mật, chỉ đặt trong `.env`) | Training, API (Registry) |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD` | `mlops`, `mlops` (chỉ dùng local) | docker compose: PostgreSQL, MLflow, Airflow |
 | `S3_ACCESS_KEY`, `S3_SECRET_KEY` | `mlops`, `mlops-secret` (chỉ dùng local) | docker compose: SeaweedFS, MLflow; DVC remote `local` |
+| `AIRFLOW_JWT_SECRET` | `local-only-jwt-secret` (chỉ dùng local) | docker compose: các service Airflow |
 | `DATABASE_URL` | Không có (không ghi/đọc log) | API (ghi log, C9), Drift service (đọc log, C14) |
 | `REFERENCE_DIR` | `data/processed` (trong container: `/app/data/processed`) | Drift service |
 | `DRIFT_MIN_ROWS` | `100` | Drift service |
@@ -211,11 +212,17 @@ có `DATABASE_URL` thì API vẫn chạy, chỉ không ghi log.
 | `postgres` | 5432 | `postgres:5432` | Database `mlflow`, `airflow`, `hotel` (bảng C9, `DATABASE_URL=...@postgres:5432/hotel`) |
 | `seaweedfs` | 8333 | `http://seaweedfs:8333` | S3: bucket `mlflow` (artifact), `dvc` (DVC remote `local`) |
 | `storage-init` | – | – | Chạy một lần, tạo bucket |
+| `airflow-apiserver` | 8080 | `http://airflow-apiserver:8080` | Airflow 3 UI + API (không đăng nhập, chỉ dùng local) |
+| `airflow-scheduler`, `airflow-dag-processor` | – | – | LocalExecutor, đọc DAG từ `./airflow/dags` |
+| `airflow-init` | – | – | Chạy một lần, `airflow db migrate` vào database `airflow` |
 
 - Dữ liệu nằm trong volume `postgres-data`, `seaweedfs-data`; `docker compose down -v` xóa sạch.
 - `infra/postgres/init.sql` chỉ chạy khi volume `postgres-data` được tạo lần đầu. Thêm database mới thì cần
   `docker compose down -v` hoặc tạo tay bằng `psql`.
-- Service mới (Airflow, Prometheus, Grafana, drift) thêm vào cùng file và dùng lại `postgres`/`seaweedfs`.
+- Service mới (Prometheus, Grafana, drift) thêm vào cùng file và dùng lại `postgres`/`seaweedfs`.
+- DAG dùng image `apache/airflow:3.4.0` nguyên bản, không import `hotel_booking`: gọi service qua HTTP
+  (ví dụ `/reload` của API) hoặc chạy image `train` bằng `DockerOperator`. CI (`Airflow DAGs`) import mọi DAG
+  bằng `DagBag` trong đúng image này.
 
 ## C12. Docker
 
