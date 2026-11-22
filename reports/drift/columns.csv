@@ -1,0 +1,198 @@
+scenario,column,method,threshold,score,drifted
+2017-01,lead_time,Wasserstein distance (normed),0.1,0.49471393525416385,True
+2017-01,stays_in_weekend_nights,Wasserstein distance (normed),0.1,0.14802750737640435,True
+2017-01,stays_in_week_nights,Wasserstein distance (normed),0.1,0.1714772386794648,True
+2017-01,adults,Wasserstein distance (normed),0.1,0.20366748433746898,True
+2017-01,children,Jensen-Shannon distance,0.1,0.007739692540146635,False
+2017-01,babies,Jensen-Shannon distance,0.1,0.009005686923622061,False
+2017-01,is_repeated_guest,Jensen-Shannon distance,0.1,0.05825302560128079,False
+2017-01,previous_cancellations,Wasserstein distance (normed),0.1,0.09999030196449572,False
+2017-01,previous_bookings_not_canceled,Wasserstein distance (normed),0.1,0.16681211976929464,True
+2017-01,days_in_waiting_list,Wasserstein distance (normed),0.1,0.15406545205850783,True
+2017-01,adr,Wasserstein distance (normed),0.1,0.48813242619431557,True
+2017-01,total_of_special_requests,Wasserstein distance (normed),0.1,0.12745482480527154,True
+2017-01,rooms_in_booking,Wasserstein distance (normed),0.1,0.24482365955386848,True
+2017-01,hotel,Jensen-Shannon distance,0.1,0.010308259268338029,False
+2017-01,meal,Jensen-Shannon distance,0.1,0.1139694599689281,True
+2017-01,market_segment,Jensen-Shannon distance,0.1,0.17378680761317136,True
+2017-01,distribution_channel,Jensen-Shannon distance,0.1,0.06509944391136302,False
+2017-01,reserved_room_type,Jensen-Shannon distance,0.1,0.043074329723896944,False
+2017-01,deposit_type,Jensen-Shannon distance,0.1,0.031602229445942265,False
+2017-01,customer_type,Jensen-Shannon distance,0.1,0.13892510116723317,True
+2017-01,agent,Jensen-Shannon distance,0.1,0.3408970658363246,True
+2017-01,company,Jensen-Shannon distance,0.1,0.1722122714142887,True
+2017-02,lead_time,Wasserstein distance (normed),0.1,0.4658687920346895,True
+2017-02,stays_in_weekend_nights,Wasserstein distance (normed),0.1,0.045857823388611836,False
+2017-02,stays_in_week_nights,Wasserstein distance (normed),0.1,0.12544226938753744,True
+2017-02,adults,Wasserstein distance (normed),0.1,0.07990382768717005,False
+2017-02,children,Jensen-Shannon distance,0.1,0.02766518198419491,False
+2017-02,babies,Jensen-Shannon distance,0.1,0.005125585553632797,False
+2017-02,is_repeated_guest,Jensen-Shannon distance,0.1,0.033479474667109314,False
+2017-02,previous_cancellations,Wasserstein distance (normed),0.1,0.11151044253594518,True
+2017-02,previous_bookings_not_canceled,Wasserstein distance (normed),0.1,0.06845837731852353,False
+2017-02,days_in_waiting_list,Wasserstein distance (normed),0.1,0.14792062037354844,True
+2017-02,adr,Wasserstein distance (normed),0.1,0.41799077834183124,True
+2017-02,total_of_special_requests,Wasserstein distance (normed),0.1,0.14398951528774184,True
+2017-02,rooms_in_booking,Wasserstein distance (normed),0.1,0.16964124405369418,True
+2017-02,hotel,Jensen-Shannon distance,0.1,0.027872671473352532,False
+2017-02,meal,Jensen-Shannon distance,0.1,0.09222746705356881,False
+2017-02,market_segment,Jensen-Shannon distance,0.1,0.13990909086007486,True
+2017-02,distribution_channel,Jensen-Shannon distance,0.1,0.03465116257525244,False
+2017-02,reserved_room_type,Jensen-Shannon distance,0.1,0.03617154472833934,False
+2017-02,deposit_type,Jensen-Shannon distance,0.1,0.06760096040218871,False
+2017-02,customer_type,Jensen-Shannon distance,0.1,0.11552657208753005,True
+2017-02,agent,Jensen-Shannon distance,0.1,0.3190673667462477,True
+2017-02,company,Jensen-Shannon distance,0.1,0.183715598587128,True
+2017-03,lead_time,Wasserstein distance (normed),0.1,0.23390688395649872,True
+2017-03,stays_in_weekend_nights,Wasserstein distance (normed),0.1,0.08448443438887256,False
+2017-03,stays_in_week_nights,Wasserstein distance (normed),0.1,0.1400186990774423,True
+2017-03,adults,Wasserstein distance (normed),0.1,0.08575922531095166,False
+2017-03,children,Jensen-Shannon distance,0.1,0.04845003699275868,False
+2017-03,babies,Jensen-Shannon distance,0.1,0.018184857647997935,False
+2017-03,is_repeated_guest,Jensen-Shannon distance,0.1,0.027087559776987003,False
+2017-03,previous_cancellations,Wasserstein distance (normed),0.1,0.11480607567052917,True
+2017-03,previous_bookings_not_canceled,Wasserstein distance (normed),0.1,0.06340053549569909,False
+2017-03,days_in_waiting_list,Wasserstein distance (normed),0.1,0.13859443501090837,True
+2017-03,adr,Wasserstein distance (normed),0.1,0.29752554232779316,True
+2017-03,total_of_special_requests,Wasserstein distance (normed),0.1,0.06059088841889243,False
+2017-03,rooms_in_booking,Wasserstein distance (normed),0.1,0.09920314341707284,False
+2017-03,hotel,Jensen-Shannon distance,0.1,0.020842065692083425,False
+2017-03,meal,Jensen-Shannon distance,0.1,0.09359150940313547,False
+2017-03,market_segment,Jensen-Shannon distance,0.1,0.10018164094943767,True
+2017-03,distribution_channel,Jensen-Shannon distance,0.1,0.02947614349125784,False
+2017-03,reserved_room_type,Jensen-Shannon distance,0.1,0.06264526532609795,False
+2017-03,deposit_type,Jensen-Shannon distance,0.1,0.03294581862389969,False
+2017-03,customer_type,Jensen-Shannon distance,0.1,0.10952993414939617,True
+2017-03,agent,Jensen-Shannon distance,0.1,0.331224132731739,True
+2017-03,company,Jensen-Shannon distance,0.1,0.14486105567273183,True
+2017-04,lead_time,Wasserstein distance (normed),0.1,0.2102363346608122,True
+2017-04,stays_in_weekend_nights,Wasserstein distance (normed),0.1,0.19933987421264848,True
+2017-04,stays_in_week_nights,Wasserstein distance (normed),0.1,0.12993277589643443,True
+2017-04,adults,Wasserstein distance (normed),0.1,0.12171556934918966,True
+2017-04,children,Jensen-Shannon distance,0.1,0.02612078308954068,False
+2017-04,babies,Jensen-Shannon distance,0.1,0.015073292481903578,False
+2017-04,is_repeated_guest,Jensen-Shannon distance,0.1,0.01865667439130417,False
+2017-04,previous_cancellations,Wasserstein distance (normed),0.1,0.11576044934972321,True
+2017-04,previous_bookings_not_canceled,Wasserstein distance (normed),0.1,0.02017147699543906,False
+2017-04,days_in_waiting_list,Wasserstein distance (normed),0.1,0.13658902605023707,True
+2017-04,adr,Wasserstein distance (normed),0.1,0.3692033577690453,True
+2017-04,total_of_special_requests,Wasserstein distance (normed),0.1,0.1475122325277025,True
+2017-04,rooms_in_booking,Wasserstein distance (normed),0.1,0.12367616201956434,True
+2017-04,hotel,Jensen-Shannon distance,0.1,0.02550890066332562,False
+2017-04,meal,Jensen-Shannon distance,0.1,0.07672970744352145,False
+2017-04,market_segment,Jensen-Shannon distance,0.1,0.09671703932008924,False
+2017-04,distribution_channel,Jensen-Shannon distance,0.1,0.04111726239921653,False
+2017-04,reserved_room_type,Jensen-Shannon distance,0.1,0.05818162984728021,False
+2017-04,deposit_type,Jensen-Shannon distance,0.1,0.009477006674935312,False
+2017-04,customer_type,Jensen-Shannon distance,0.1,0.08326457433600504,False
+2017-04,agent,Jensen-Shannon distance,0.1,0.3286699949841485,True
+2017-04,company,Jensen-Shannon distance,0.1,0.14720486283905232,True
+2017-05,lead_time,Wasserstein distance (normed),0.1,0.19997063912957894,True
+2017-05,stays_in_weekend_nights,Wasserstein distance (normed),0.1,0.022246311931814727,False
+2017-05,stays_in_week_nights,Wasserstein distance (normed),0.1,0.06248558996757952,False
+2017-05,adults,Wasserstein distance (normed),0.1,0.026780265552382505,False
+2017-05,children,Jensen-Shannon distance,0.1,0.030211995661903548,False
+2017-05,babies,Jensen-Shannon distance,0.1,0.010294295317501737,False
+2017-05,is_repeated_guest,Jensen-Shannon distance,0.1,0.0034617888578259383,False
+2017-05,previous_cancellations,Wasserstein distance (normed),0.1,0.1124494103777267,True
+2017-05,previous_bookings_not_canceled,Wasserstein distance (normed),0.1,0.036486550311055126,False
+2017-05,days_in_waiting_list,Wasserstein distance (normed),0.1,0.1467972614445591,True
+2017-05,adr,Wasserstein distance (normed),0.1,0.5461262343542974,True
+2017-05,total_of_special_requests,Wasserstein distance (normed),0.1,0.14164822824013915,True
+2017-05,rooms_in_booking,Wasserstein distance (normed),0.1,0.12095390397526791,True
+2017-05,hotel,Jensen-Shannon distance,0.1,0.048390013117126006,False
+2017-05,meal,Jensen-Shannon distance,0.1,0.0965944706108022,False
+2017-05,market_segment,Jensen-Shannon distance,0.1,0.09475653804056018,False
+2017-05,distribution_channel,Jensen-Shannon distance,0.1,0.03716199006604023,False
+2017-05,reserved_room_type,Jensen-Shannon distance,0.1,0.06195010433104008,False
+2017-05,deposit_type,Jensen-Shannon distance,0.1,0.020354375580180658,False
+2017-05,customer_type,Jensen-Shannon distance,0.1,0.10650453988955721,True
+2017-05,agent,Jensen-Shannon distance,0.1,0.33847327484721984,True
+2017-05,company,Jensen-Shannon distance,0.1,0.1316947178594337,True
+2017-06,lead_time,Wasserstein distance (normed),0.1,0.3344364372256671,True
+2017-06,stays_in_weekend_nights,Wasserstein distance (normed),0.1,0.09766500399220436,False
+2017-06,stays_in_week_nights,Wasserstein distance (normed),0.1,0.16555757987638356,True
+2017-06,adults,Wasserstein distance (normed),0.1,0.09912999949929506,False
+2017-06,children,Jensen-Shannon distance,0.1,0.018209369814185465,False
+2017-06,babies,Jensen-Shannon distance,0.1,0.014412962644761928,False
+2017-06,is_repeated_guest,Jensen-Shannon distance,0.1,0.0014949505324768336,False
+2017-06,previous_cancellations,Wasserstein distance (normed),0.1,0.10816809835568607,True
+2017-06,previous_bookings_not_canceled,Wasserstein distance (normed),0.1,0.042011759301717876,False
+2017-06,days_in_waiting_list,Wasserstein distance (normed),0.1,0.14856527523489121,True
+2017-06,adr,Wasserstein distance (normed),0.1,0.6913767680107421,True
+2017-06,total_of_special_requests,Wasserstein distance (normed),0.1,0.14419081598339387,True
+2017-06,rooms_in_booking,Wasserstein distance (normed),0.1,0.14220869297719735,True
+2017-06,hotel,Jensen-Shannon distance,0.1,0.03405974990275421,False
+2017-06,meal,Jensen-Shannon distance,0.1,0.09086830703492119,False
+2017-06,market_segment,Jensen-Shannon distance,0.1,0.09172943835077299,False
+2017-06,distribution_channel,Jensen-Shannon distance,0.1,0.043152561488483336,False
+2017-06,reserved_room_type,Jensen-Shannon distance,0.1,0.06798386883610498,False
+2017-06,deposit_type,Jensen-Shannon distance,0.1,0.023714023824212796,False
+2017-06,customer_type,Jensen-Shannon distance,0.1,0.12808390964957533,True
+2017-06,agent,Jensen-Shannon distance,0.1,0.32871757759505377,True
+2017-06,company,Jensen-Shannon distance,0.1,0.14357489374412916,True
+2017-07,lead_time,Wasserstein distance (normed),0.1,0.4894200353689306,True
+2017-07,stays_in_weekend_nights,Wasserstein distance (normed),0.1,0.25289587169035765,True
+2017-07,stays_in_week_nights,Wasserstein distance (normed),0.1,0.19437057813219474,True
+2017-07,adults,Wasserstein distance (normed),0.1,0.26540118923306905,True
+2017-07,children,Jensen-Shannon distance,0.1,0.09793867731476466,False
+2017-07,babies,Jensen-Shannon distance,0.1,0.008924427865184848,False
+2017-07,is_repeated_guest,Jensen-Shannon distance,0.1,0.021165252516905934,False
+2017-07,previous_cancellations,Wasserstein distance (normed),0.1,0.10874542123388668,True
+2017-07,previous_bookings_not_canceled,Wasserstein distance (normed),0.1,0.04956382018895651,False
+2017-07,days_in_waiting_list,Wasserstein distance (normed),0.1,0.1563645769752901,True
+2017-07,adr,Wasserstein distance (normed),0.1,1.078542015281084,True
+2017-07,total_of_special_requests,Wasserstein distance (normed),0.1,0.371059361360787,True
+2017-07,rooms_in_booking,Wasserstein distance (normed),0.1,0.306305043796028,True
+2017-07,hotel,Jensen-Shannon distance,0.1,0.008699854288248998,False
+2017-07,meal,Jensen-Shannon distance,0.1,0.10371621276096937,True
+2017-07,market_segment,Jensen-Shannon distance,0.1,0.20588976990222946,True
+2017-07,distribution_channel,Jensen-Shannon distance,0.1,0.06720369000456704,False
+2017-07,reserved_room_type,Jensen-Shannon distance,0.1,0.11473514251049863,True
+2017-07,deposit_type,Jensen-Shannon distance,0.1,0.13635108908669288,True
+2017-07,customer_type,Jensen-Shannon distance,0.1,0.125842046243181,True
+2017-07,agent,Jensen-Shannon distance,0.1,0.3745030870356856,True
+2017-07,company,Jensen-Shannon distance,0.1,0.12465989984601221,True
+2017-08,lead_time,Wasserstein distance (normed),0.1,0.3451149661652461,True
+2017-08,stays_in_weekend_nights,Wasserstein distance (normed),0.1,0.1933082909093445,True
+2017-08,stays_in_week_nights,Wasserstein distance (normed),0.1,0.2935728892539721,True
+2017-08,adults,Wasserstein distance (normed),0.1,0.2789638957474348,True
+2017-08,children,Jensen-Shannon distance,0.1,0.11596574842896644,True
+2017-08,babies,Jensen-Shannon distance,0.1,0.004705046226550882,False
+2017-08,is_repeated_guest,Jensen-Shannon distance,0.1,0.021620997354297705,False
+2017-08,previous_cancellations,Wasserstein distance (normed),0.1,0.11279504779963666,True
+2017-08,previous_bookings_not_canceled,Wasserstein distance (normed),0.1,0.022397100829770426,False
+2017-08,days_in_waiting_list,Wasserstein distance (normed),0.1,0.15917764096432313,True
+2017-08,adr,Wasserstein distance (normed),0.1,1.5567541852193836,True
+2017-08,total_of_special_requests,Wasserstein distance (normed),0.1,0.545512438039326,True
+2017-08,rooms_in_booking,Wasserstein distance (normed),0.1,0.32352504418843814,True
+2017-08,hotel,Jensen-Shannon distance,0.1,0.017515965192321185,False
+2017-08,meal,Jensen-Shannon distance,0.1,0.10378069862217242,True
+2017-08,market_segment,Jensen-Shannon distance,0.1,0.22434819967173358,True
+2017-08,distribution_channel,Jensen-Shannon distance,0.1,0.09279777915260891,False
+2017-08,reserved_room_type,Jensen-Shannon distance,0.1,0.13603143241837126,True
+2017-08,deposit_type,Jensen-Shannon distance,0.1,0.17302889740282637,True
+2017-08,customer_type,Jensen-Shannon distance,0.1,0.1258822364505911,True
+2017-08,agent,Jensen-Shannon distance,0.1,0.3671702874611152,True
+2017-08,company,Jensen-Shannon distance,0.1,0.1235616488745944,True
+city_to_resort,lead_time,Wasserstein distance (normed),0.1,0.16435329201429688,True
+city_to_resort,stays_in_weekend_nights,Wasserstein distance (normed),0.1,0.44407648904144387,True
+city_to_resort,stays_in_week_nights,Wasserstein distance (normed),0.1,0.6650412158377426,True
+city_to_resort,adults,Wasserstein distance (normed),0.1,0.13289884221127823,True
+city_to_resort,children,Jensen-Shannon distance,0.1,0.023555500718613426,False
+city_to_resort,babies,Jensen-Shannon distance,0.1,0.03636283668920001,False
+city_to_resort,is_repeated_guest,Jensen-Shannon distance,0.1,0.020708845945558274,False
+city_to_resort,previous_cancellations,Wasserstein distance (normed),0.1,0.32244737573244175,True
+city_to_resort,previous_bookings_not_canceled,Wasserstein distance (normed),0.1,0.05580991925021707,False
+city_to_resort,days_in_waiting_list,Wasserstein distance (normed),0.1,0.16465618839108764,True
+city_to_resort,adr,Wasserstein distance (normed),0.1,0.6144581210468922,True
+city_to_resort,total_of_special_requests,Wasserstein distance (normed),0.1,0.09831006852556912,False
+city_to_resort,rooms_in_booking,Wasserstein distance (normed),0.1,0.36758146360003485,True
+city_to_resort,meal,Jensen-Shannon distance,0.1,0.24204166843303146,True
+city_to_resort,market_segment,Jensen-Shannon distance,0.1,0.10964467307866861,True
+city_to_resort,distribution_channel,Jensen-Shannon distance,0.1,0.14620170557402787,True
+city_to_resort,reserved_room_type,Jensen-Shannon distance,0.1,0.23959548420844085,True
+city_to_resort,deposit_type,Jensen-Shannon distance,0.1,0.14458886376967292,True
+city_to_resort,customer_type,Jensen-Shannon distance,0.1,0.05654911382298843,False
+city_to_resort,agent,Jensen-Shannon distance,0.1,0.7311837988968485,True
+city_to_resort,company,Jensen-Shannon distance,0.1,0.19508336751579078,True
