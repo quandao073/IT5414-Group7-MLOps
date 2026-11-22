@@ -24,7 +24,7 @@
 | C8 | Backend ONNX | Sẽ bổ sung | Load test |
 | C9 | [Bảng log dự đoán và nhãn](#c9-bang-log-du-doan-va-nhan) | Đề xuất, SQL đã chạy thử, API chưa ghi | Drift, Training, Platform |
 | C10 | Metrics Prometheus | Sẽ bổ sung | Platform |
-| C11 | Service API trong compose | Sẽ bổ sung | Platform |
+| C11 | [Service trong docker compose](#c11-docker-compose) | Đề xuất, đã có `docker-compose.yml` | Platform, cả nhóm |
 | C12 | [Docker image](#c12-docker) | Đề xuất, đã có Dockerfile | Platform, Training |
 | C13 | Checklist demo | Sẽ bổ sung | Cả nhóm |
 | C14 | [Drift service và DAG `monitor_drift`](#c14-drift-service) | Đề xuất, đã có code, chờ API ghi log (C9) | Platform (compose, Grafana), Training (DAG `retrain`) |
@@ -139,9 +139,11 @@ Danh sách đầy đủ trong `.env.example` ở gốc repo. Bí mật (mật kh
 | `MODEL_PATH` | `models/model.joblib` (trong container: `/app/models/model.joblib`) | API |
 | `MODEL_CARD_PATH` | `models/model_card.json` (trong container: `/app/models/model_card.json`) | API |
 | `API_URL` | `http://localhost:8000` | Replay, Frontend, load test |
-| `MLFLOW_TRACKING_URI` | `https://dagshub.com/quandao073/IT5414-Group7-MLOps.mlflow` | Training, API (Registry) |
+| `MLFLOW_TRACKING_URI` | `https://dagshub.com/quandao073/IT5414-Group7-MLOps.mlflow`; MLflow tự host: `http://localhost:5000` (trong compose: `http://mlflow:5000`) | Training, API (Registry) |
 | `MLFLOW_TRACKING_USERNAME` | Tên tài khoản DagsHub của mỗi người | Training, API (Registry) |
 | `MLFLOW_TRACKING_PASSWORD` | Access token DagsHub (bí mật, chỉ đặt trong `.env`) | Training, API (Registry) |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD` | `mlops`, `mlops` (chỉ dùng local) | docker compose: PostgreSQL, MLflow, Airflow |
+| `S3_ACCESS_KEY`, `S3_SECRET_KEY` | `mlops`, `mlops-secret` (chỉ dùng local) | docker compose: SeaweedFS, MLflow; DVC remote `local` |
 | `DATABASE_URL` | Không có (không ghi/đọc log) | API (ghi log, C9), Drift service (đọc log, C14) |
 | `REFERENCE_DIR` | `data/processed` (trong container: `/app/data/processed`) | Drift service |
 | `DRIFT_MIN_ROWS` | `100` | Drift service |
@@ -197,12 +199,32 @@ vào log, không đưa vào mô hình.
 Kết nối: biến môi trường `DATABASE_URL` (ví dụ `postgresql+psycopg://user:password@postgres:5432/hotel`). Không
 có `DATABASE_URL` thì API vẫn chạy, chỉ không ghi log.
 
+## C11. Docker compose
+
+`docker compose up -d --build` ở gốc repo. Trong mạng compose, service gọi nhau bằng tên service (cột URL nội bộ).
+
+| Service | Cổng host | URL nội bộ | Vai trò |
+|---|---|---|---|
+| `api` | 8000 | `http://api:8000` | API dự đoán, mount `./models` vào `/app/models` |
+| `frontend` | 8501 | – | Streamlit, gọi `API_URL=http://api:8000` |
+| `mlflow` | 5000 | `http://mlflow:5000` | Tracking + Model Registry; artifact đi qua server (`--serve-artifacts`) nên client không cần key S3 |
+| `postgres` | 5432 | `postgres:5432` | Database `mlflow`, `airflow`, `hotel` (bảng C9, `DATABASE_URL=...@postgres:5432/hotel`) |
+| `seaweedfs` | 8333 | `http://seaweedfs:8333` | S3: bucket `mlflow` (artifact), `dvc` (DVC remote `local`) |
+| `storage-init` | – | – | Chạy một lần, tạo bucket |
+
+- Dữ liệu nằm trong volume `postgres-data`, `seaweedfs-data`; `docker compose down -v` xóa sạch.
+- `infra/postgres/init.sql` chỉ chạy khi volume `postgres-data` được tạo lần đầu. Thêm database mới thì cần
+  `docker compose down -v` hoặc tạo tay bằng `psql`.
+- Service mới (Airflow, Prometheus, Grafana, drift) thêm vào cùng file và dùng lại `postgres`/`seaweedfs`.
+
 ## C12. Docker
 
 | Image | Dockerfile | Lệnh chạy |
 |---|---|---|
 | `api:latest` | `dockerfiles/api.dockerfile` | `docker run --rm -p 8000:8000 -v ./models:/app/models:ro api:latest` |
 | `train:latest` | `dockerfiles/train.dockerfile` | `docker run --rm -v ./data:/app/data -v ./models:/app/models train:latest` |
+| `hotel-booking-frontend` | `dockerfiles/frontend.dockerfile` | `docker compose up -d frontend` |
+| `hotel-booking-mlflow` | `dockerfiles/mlflow.dockerfile` | `docker compose up -d mlflow` (image MLflow chính thức + `psycopg2`, `boto3`) |
 | `drift:latest` | `dockerfiles/drift.dockerfile` | `docker run --rm -p 8001:8001 -v ./data/processed:/app/data/processed:ro -e DATABASE_URL=... drift:latest` |
 
 - Build tất cả: `uv run invoke docker-build`.

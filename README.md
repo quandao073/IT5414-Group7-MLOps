@@ -39,7 +39,7 @@ Dự án được coi là thành công khi đạt được:
 | Quản lý môi trường & dependency | `uv`, `pyproject.toml`, `uv.lock` |
 | Cấu trúc dự án | cookiecutter |
 | Chất lượng mã | `ruff` (lint + format), type hints + `mypy`, `pre-commit` |
-| Phiên bản dữ liệu | DVC (remote: DagsHub khi phát triển, MinIO khi chạy bằng docker compose) |
+| Phiên bản dữ liệu | DVC (remote: DagsHub khi phát triển, SeaweedFS khi chạy bằng docker compose) |
 | Kiểm tra dữ liệu | pandera |
 | Cấu hình | Hydra |
 | Logging | `loguru` |
@@ -50,7 +50,7 @@ Dự án được coi là thành công khi đạt được:
 | CI/CD | GitHub Actions, CML |
 | Đóng gói & phục vụ | Docker, docker compose, FastAPI, ONNX Runtime |
 | Frontend | Streamlit |
-| Lưu trữ | PostgreSQL, MinIO |
+| Lưu trữ | PostgreSQL, SeaweedFS (S3) |
 | Giám sát | Evidently (data drift), `prometheus-client`, Prometheus, Grafana |
 | Tài liệu | MkDocs |
 
@@ -103,7 +103,7 @@ Toàn bộ hệ thống chạy local bằng Docker Desktop và `docker compose`,
 | `api` | FastAPI + ONNX Runtime | Dự đoán, `/metrics`, nạp mô hình `champion` |
 | `frontend` | Streamlit | Giao diện nhập booking / upload CSV |
 | `mlflow` | MLflow | Tracking, Model Registry |
-| `minio` | MinIO | Artifact store, DVC remote (S3) |
+| `seaweedfs` | SeaweedFS | Artifact store MLflow, DVC remote (S3) |
 | `postgres` | PostgreSQL | Metadata Airflow/MLflow, log dự đoán |
 | `airflow-*` | Apache Airflow 3 | DAG `retrain`, `monitor_drift` |
 | `drift` | FastAPI + Evidently | Tính drift, xuất metrics drift |
@@ -142,6 +142,24 @@ Kết quả profiling (số đo trước/sau, nút thắt, các tối ưu đã t
    uv run dvc remote modify origin --local password <dagshub-token>
    ```
 
+**Chạy bằng docker compose** (Docker Desktop, không cần Internet sau lần build đầu). Danh sách service và cổng ở mục C11 của [contracts](docs/source/contracts.md):
+
+```bash
+docker compose up -d --build   # API :8000, Streamlit :8501, MLflow :5000, PostgreSQL :5432, SeaweedFS S3 :8333
+docker compose ps              # chờ các service báo healthy
+docker compose down            # dừng; thêm -v để xóa luôn dữ liệu PostgreSQL và SeaweedFS
+```
+
+- API nạp `models/model.joblib` (tạo bằng `uv run invoke sample-model`), sau khi tạo model thì chạy `docker compose restart api`.
+- Dùng MLflow tự host thay cho DagsHub: đặt `MLFLOW_TRACKING_URI=http://localhost:5000` trong `.env`.
+- DVC remote `local` trên SeaweedFS (key mặc định trong `.env.example`):
+
+  ```bash
+  uv run dvc remote modify local --local access_key_id mlops
+  uv run dvc remote modify local --local secret_access_key mlops-secret
+  uv run dvc push -r local   # hoặc dvc pull -r local
+  ```
+
 **Pipeline dữ liệu** (`dvc.yaml`): `prepare` chạy `data.py` sinh `data/processed`; `validate` kiểm tra từng split bằng pandera (đủ cột, không có cột leakage, khoảng giá trị, null, ngày đến nằm đúng cửa sổ của split) và dừng pipeline nếu có lỗi, kết quả ở `reports/data_validation.json`; `drift` so dữ liệu train với từng tháng 2017 và City Hotel với Resort Hotel bằng Evidently, ghi report HTML vào `reports/drift/html/` và bảng tỉ lệ cột bị drift vào `reports/drift/summary.csv`. Từng bước cũng chạy riêng được bằng `uv run invoke preprocess-data`, `validate-data`, `drift-report`. Sau khi `dvc repro`, chạy `uv run dvc push` để người khác `dvc pull` được cả dữ liệu đã xử lý. Kết quả và nhận xét drift: [reports/drift.md](reports/drift.md).
 
 **Drift service** (`uv run invoke serve-drift`, cổng 8001): đọc input mà API đã log trong PostgreSQL (`DATABASE_URL`), tính drift theo tháng replay hoặc khoảng thời gian và expose `/metrics` cho Prometheus. DAG Airflow `monitor_drift` gọi service này định kỳ và kích hoạt DAG `retrain` khi tỉ lệ cột bị drift vượt ngưỡng. Chi tiết endpoint và cấu hình: mục C14 trong [docs/source/contracts.md](docs/source/contracts.md).
@@ -158,7 +176,7 @@ Quy trình nhánh, Pull Request và quy ước commit: xem [CONTRIBUTING.md](CON
 
 ```mermaid
 flowchart LR
-    A[Kaggle CSV] -->|data.py| B[(DVC remote<br/>DagsHub / MinIO)]
+    A[Kaggle CSV] -->|data.py| B[(DVC remote<br/>DagsHub / SeaweedFS)]
     B --> C[Tiền xử lý + validate schema<br/>pandera]
     C --> D[train.py<br/>Hydra + Optuna]
     D -->|metrics, artifacts| E[MLflow<br/>Tracking + Model Registry]
@@ -189,6 +207,7 @@ flowchart LR
 ├── data/                     # quản lý bằng DVC: raw/, processed/, stream/ (8 batch 2017)
 ├── dockerfiles/              # Dockerfile cho từng service
 ├── docs/                     # tài liệu MkDocs
+├── infra/postgres/           # script tạo database cho PostgreSQL trong compose
 ├── models/                   # artifact mô hình local (joblib, ONNX)
 ├── monitoring/
 │   ├── grafana/              # dashboards/, provisioning/
