@@ -94,6 +94,7 @@ Pipeline mô hình nhận bản ghi gốc: `BookingFeatureBuilder` tạo đặc 
 Toàn bộ hệ thống chạy local bằng Docker Desktop và `docker compose`, không triển khai lên cloud.
 
 - **Phát triển:** Python 3.12 + `uv` (phiên bản khóa trong `uv.lock`); `pre-commit` chạy `ruff` trước mỗi commit; `pytest` chạy local và trên GitHub Actions.
+- **Docker image:** mỗi lần merge vào `main`, workflow `Docker images` build và push `ghcr.io/quandao073/it5414-group7-mlops-api` và `ghcr.io/quandao073/it5414-group7-mlops-train` (tag `sha-<commit>` và `latest`). PR sửa `dockerfiles/` chỉ build để kiểm tra, không push.
 - **Dịch vụ dùng chung:** DagsHub cung cấp MLflow tracking server (kèm Model Registry) và DVC remote.
 - **Triển khai local:** các service dưới đây được tự host bằng `docker compose`, không phụ thuộc Internet.
 
