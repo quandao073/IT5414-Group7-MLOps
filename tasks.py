@@ -15,6 +15,22 @@ def preprocess_data(ctx: Context) -> None:
 
 
 @task
+def validate_data(ctx: Context) -> None:
+    """Validate the processed splits with pandera and write reports/data_validation.json."""
+    ctx.run(
+        f"uv run src/{PROJECT_NAME}/validation.py data/processed reports/data_validation.json",
+        echo=True,
+        pty=not WINDOWS,
+    )
+
+
+@task
+def drift_report(ctx: Context) -> None:
+    """Write the Evidently drift reports (each 2017 month and City vs Resort Hotel) into reports/drift."""
+    ctx.run(f"uv run src/{PROJECT_NAME}/drift.py data/processed reports/drift", echo=True, pty=not WINDOWS)
+
+
+@task
 def train(ctx: Context) -> None:
     """Train model."""
     ctx.run(f"uv run src/{PROJECT_NAME}/train.py", echo=True, pty=not WINDOWS)
@@ -31,6 +47,13 @@ def serve_api(ctx: Context, port: int = 8000, reload: bool = False) -> None:
     """Serve the prediction API locally; Swagger UI at /docs."""
     flags = " --reload" if reload else ""
     ctx.run(f"uv run uvicorn {PROJECT_NAME}.api:app --port {port}{flags}", echo=True, pty=not WINDOWS)
+
+
+@task
+def serve_drift(ctx: Context, port: int = 8001, reload: bool = False) -> None:
+    """Serve the drift detection service locally (needs DATABASE_URL); Swagger UI at /docs."""
+    flags = " --reload" if reload else ""
+    ctx.run(f"uv run uvicorn {PROJECT_NAME}.drift_service:app --port {port}{flags}", echo=True, pty=not WINDOWS)
 
 
 @task
@@ -91,6 +114,11 @@ def docker_build(ctx: Context, progress: str = "plain") -> None:
     )
     ctx.run(
         f"docker build -t api:latest . -f dockerfiles/api.dockerfile --progress={progress}", echo=True, pty=not WINDOWS
+    )
+    ctx.run(
+        f"docker build -t drift:latest . -f dockerfiles/drift.dockerfile --progress={progress}",
+        echo=True,
+        pty=not WINDOWS,
     )
 
 

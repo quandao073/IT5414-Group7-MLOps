@@ -1,0 +1,35 @@
+stages:
+  prepare:
+    cmd: uv run src/hotel_booking/data.py data/raw data/processed
+    deps:
+      - data/raw/hotel_bookings.csv
+      - src/hotel_booking/config.py
+      - src/hotel_booking/data.py
+    outs:
+      - data/processed
+  validate:
+    cmd: uv run src/hotel_booking/validation.py data/processed reports/data_validation.json
+    deps:
+      - data/processed
+      - src/hotel_booking/validation.py
+    metrics:
+      - reports/data_validation.json:
+          cache: false
+  drift:
+    cmd: uv run src/hotel_booking/drift.py data/processed reports/drift
+    deps:
+      - data/processed
+      - reports/data_validation.json
+      - src/hotel_booking/drift.py
+    outs:
+      - reports/drift/html
+      - reports/drift/columns.csv:
+          cache: false
+    metrics:
+      - reports/drift/summary.json:
+          cache: false
+    plots:
+      - reports/drift/summary.csv:
+          x: scenario
+          y: drift_share
+          cache: false

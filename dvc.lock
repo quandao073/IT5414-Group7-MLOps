@@ -1,0 +1,75 @@
+schema: '2.0'
+stages:
+  prepare:
+    cmd: uv run src/hotel_booking/data.py data/raw data/processed
+    deps:
+    - path: data/raw/hotel_bookings.csv
+      hash: md5
+      md5: 5bf588c5a949443e021fb7c847d31b27
+      size: 16855599
+    - path: src/hotel_booking/config.py
+      hash: md5
+      md5: 5f2db840c97feb58e8e54d285dc44e16
+      size: 1972
+    - path: src/hotel_booking/data.py
+      hash: md5
+      md5: 8e39d2a79bc0c53ee837b77fc5a3efb4
+      size: 10394
+    outs:
+    - path: data/processed
+      hash: md5
+      md5: 97e0a4cef5786bb9de57d7aea9263929.dir
+      size: 16873764
+      nfiles: 4
+  validate:
+    cmd: uv run src/hotel_booking/validation.py data/processed
+      reports/data_validation.json
+    deps:
+    - path: data/processed
+      hash: md5
+      md5: 97e0a4cef5786bb9de57d7aea9263929.dir
+      size: 16873764
+      nfiles: 4
+    - path: src/hotel_booking/validation.py
+      hash: md5
+      md5: 1d40e8e55f8052f22be22aac8ae24e26
+      size: 6601
+    outs:
+    - path: reports/data_validation.json
+      hash: md5
+      md5: 88eacc7b67706c3176b88313b217641a
+      size: 335
+  drift:
+    cmd: uv run src/hotel_booking/drift.py data/processed reports/drift
+    deps:
+    - path: data/processed
+      hash: md5
+      md5: 97e0a4cef5786bb9de57d7aea9263929.dir
+      size: 16873764
+      nfiles: 4
+    - path: reports/data_validation.json
+      hash: md5
+      md5: 88eacc7b67706c3176b88313b217641a
+      size: 335
+    - path: src/hotel_booking/drift.py
+      hash: md5
+      md5: 2d4e56afd92f733429c087e555dadb18
+      size: 7336
+    outs:
+    - path: reports/drift/columns.csv
+      hash: md5
+      md5: fca778781c7dfc0cd4c3e564dff0f6a2
+      size: 15946
+    - path: reports/drift/html
+      hash: md5
+      md5: 34024ef276b75b1647173cc696ee7b85.dir
+      size: 42812518
+      nfiles: 9
+    - path: reports/drift/summary.csv
+      hash: md5
+      md5: 24835a0a94f18a444eaa744e4eafeabb
+      size: 2193
+    - path: reports/drift/summary.json
+      hash: md5
+      md5: 869f47961a12b5fe32cb381e5d12343e
+      size: 3551
