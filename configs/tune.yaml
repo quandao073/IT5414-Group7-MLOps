@@ -1,0 +1,6 @@
+defaults:
+  - model: lgbm
+  - data: default
+  - train: default
+  - hpo: lgbm
+  - _self_
