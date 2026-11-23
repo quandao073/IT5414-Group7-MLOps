@@ -311,9 +311,13 @@ Quy trình:
 
 ```bash
 uv run invoke train --overrides "model=lgbm train.register=true"   # đăng ký bản mới là challenger
-uv run invoke registry --command "promote --metric roc_auc"        # lên champion nếu tốt hơn champion
+uv run invoke retrain                                              # train + đăng ký + promote theo configs/promotion/
+uv run invoke registry --command "promote --metric roc_auc"        # promote tay nếu tốt hơn champion
 uv run invoke registry --command "show"
 ```
+
+Metric và ngưỡng cải thiện tối thiểu để lên champion nằm trong `configs/promotion/default.yaml`
+(`promotion.metric`, `promotion.min_delta`); `retrain.retrain(cfg)` là điểm vào cho DAG `retrain`.
 
 `decision_threshold` và `input_schema` nằm trong `model_card.json` của run nguồn
 (`MlflowClient().download_artifacts(version.run_id, "model_card.json")`). API chưa đọc từ Registry; khi nối vào API

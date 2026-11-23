@@ -33,6 +33,8 @@
     * `uv run invoke evaluate [--split test]` prints ROC-AUC, PR-AUC and F1 of `models/model.joblib`.
     * `uv run invoke tune [--overrides "hpo.n_trials=10"]` tunes LightGBM with Optuna (nested MLflow runs) and writes
       `configs/model/lgbm_tuned.yaml`.
+    * `uv run invoke retrain [--overrides "promotion.min_delta=0.002"]` trains, registers the model as `challenger` and
+      promotes it to `champion` when its `promotion.metric` beats the champion by `promotion.min_delta`.
     * `uv run invoke registry --command "show|promote --metric roc_auc|set-alias champion 2"` manages the
       `champion`/`challenger` aliases (contract C6).
 * Serving (FastAPI) commands:

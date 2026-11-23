@@ -49,6 +49,12 @@ def tune(ctx: Context, overrides: str = "") -> None:
 
 
 @task
+def retrain(ctx: Context, overrides: str = "") -> None:
+    """Retrain, register as challenger and promote if better; overrides such as "promotion.min_delta=0.002"."""
+    ctx.run(f"uv run src/{PROJECT_NAME}/retrain.py {overrides}", echo=True, pty=not WINDOWS)
+
+
+@task
 def registry(ctx: Context, command: str = "show") -> None:
     """Manage the MLflow Model Registry, e.g. "show", "promote --metric roc_auc", "set-alias champion 2"."""
     ctx.run(f"uv run src/{PROJECT_NAME}/registry.py {command}", echo=True, pty=not WINDOWS)
