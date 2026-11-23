@@ -31,9 +31,27 @@ def drift_report(ctx: Context) -> None:
 
 
 @task
-def train(ctx: Context) -> None:
-    """Train model."""
-    ctx.run(f"uv run src/{PROJECT_NAME}/train.py", echo=True, pty=not WINDOWS)
+def train(ctx: Context, overrides: str = "") -> None:
+    """Train with Hydra and track in MLflow; overrides such as "model=logreg train.seed=7 train.register=true"."""
+    ctx.run(f"uv run src/{PROJECT_NAME}/train.py {overrides}", echo=True, pty=not WINDOWS)
+
+
+@task
+def evaluate(ctx: Context, split: str = "test") -> None:
+    """Print ROC-AUC, PR-AUC and F1 of models/model.joblib on a split."""
+    ctx.run(f"uv run src/{PROJECT_NAME}/evaluate.py --split {split}", echo=True, pty=not WINDOWS)
+
+
+@task
+def tune(ctx: Context, overrides: str = "") -> None:
+    """Tune LightGBM with Optuna (nested MLflow runs); overrides such as "hpo.n_trials=10"."""
+    ctx.run(f"uv run src/{PROJECT_NAME}/tune.py {overrides}", echo=True, pty=not WINDOWS)
+
+
+@task
+def registry(ctx: Context, command: str = "show") -> None:
+    """Manage the MLflow Model Registry, e.g. "show", "promote --metric roc_auc", "set-alias champion 2"."""
+    ctx.run(f"uv run src/{PROJECT_NAME}/registry.py {command}", echo=True, pty=not WINDOWS)
 
 
 @task
