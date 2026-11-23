@@ -109,3 +109,14 @@ def booking() -> dict[str, Any]:
         "total_of_special_requests": 1,
         "rooms_in_booking": 1,
     }
+
+
+@pytest.fixture
+def processed_dir(sample: pd.DataFrame, tmp_path: Path) -> Path:
+    """A folder with the train and test splits of the synthetic bookings, as written by `preprocess`."""
+    splits = data.time_split(sample)
+    folder = tmp_path / "processed"
+    folder.mkdir()
+    for name in ("train", "test"):
+        splits[name].to_csv(folder / f"{name}.csv", index=False)
+    return folder
