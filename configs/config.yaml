@@ -2,4 +2,5 @@ defaults:
   - model: lgbm
   - data: default
   - train: default
+  - promotion: default
   - _self_
