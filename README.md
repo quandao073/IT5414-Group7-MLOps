@@ -169,7 +169,7 @@ Unit test chạy được cả khi chưa có dữ liệu thật: các test cần
 
 Trên macOS, XGBoost và LightGBM cần OpenMP: chạy `brew install libomp` trước `uv sync`.
 
-**Trạng thái mã nguồn:** đã có `data.py` (làm sạch, chia theo thời gian, schema), `features.py`, `model.py` (`build_from_spec` dựng pipeline hoặc ensemble từ một spec dạng `configs/model/*.yaml`) và `evaluate.py` (metrics, chọn ngưỡng). `train.py`, `api.py` và `visualize.py` chưa được viết, nên `uv run invoke train` hiện chưa làm gì.
+**Trạng thái mã nguồn:** đã có `data.py` (làm sạch, chia theo thời gian, schema), `features.py`, `model.py` (`build_from_spec` dựng pipeline hoặc ensemble từ một spec dạng `configs/model/*.yaml`) và `evaluate.py` (metrics, chọn ngưỡng). `train.py` (Hydra + MLflow), `tune.py` (Optuna), `registry.py` (alias champion/challenger) và `tracking.py` đã có; `visualize.py` chưa được viết.
 
 Quy trình nhánh, Pull Request và quy ước commit: xem [CONTRIBUTING.md](CONTRIBUTING.md).
 
