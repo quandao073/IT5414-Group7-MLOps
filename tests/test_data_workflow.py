@@ -1,24 +1,24 @@
 """Tests for the data-changed workflow contract."""
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import yaml
 
 WORKFLOW = Path(".github/workflows/data_changed.yaml")
 
 
-def load_workflow() -> dict[str, Any]:
+def load_workflow() -> dict[Any, Any]:
     """Parse the workflow file.
 
     Returns:
         The parsed workflow; PyYAML maps the `on` key to `True`.
     """
-    parsed: dict[str, Any] = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    parsed: dict[Any, Any] = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
     return parsed
 
 
-def triggers_of(config: dict[str, Any]) -> dict[str, Any]:
+def triggers_of(config: dict[Any, Any]) -> dict[str, Any]:
     """Return the trigger mapping of a parsed workflow.
 
     Args:
@@ -27,8 +27,8 @@ def triggers_of(config: dict[str, Any]) -> dict[str, Any]:
     Returns:
         The value of the `on` key, whichever way PyYAML spelled it.
     """
-    triggers: dict[str, Any] = config.get("on") or config.get(True)
-    return triggers
+    triggers = config.get("on") or config.get(True)
+    return cast(dict[str, Any], triggers)
 
 
 def test_workflow_triggers_on_dvc_changes() -> None:
