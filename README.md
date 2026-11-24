@@ -142,6 +142,8 @@ Kết quả profiling (số đo trước/sau, nút thắt, các tối ưu đã t
    uv run dvc remote modify origin --local password <dagshub-token>
    ```
 
+CI đọc cùng thông tin đó từ hai repository secret `DAGSHUB_USERNAME` và `DAGSHUB_TOKEN` (Settings → Secrets and variables → Actions, token tạo tại [dagshub.com/user/settings/tokens](https://dagshub.com/user/settings/tokens)). Workflow `data_changed.yaml` tự chạy `dvc pull`, sinh lại `data/processed`, validate bằng pandera rồi chạy test dữ liệu mỗi khi `**/*.dvc`, `dvc.lock` hay `dvc.yaml` thay đổi; thiếu secret thì job dừng ngay với thông báo nêu tên secret.
+
 **Chạy bằng docker compose** (Docker Desktop, không cần Internet sau lần build đầu). Danh sách service và cổng ở mục C11 của [contracts](docs/source/contracts.md):
 
 ```bash
