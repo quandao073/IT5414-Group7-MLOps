@@ -1,0 +1,72 @@
+name: Data changed
+
+on:
+  push:
+    branches: [main, develop]
+    paths: &data_paths
+      - "**/*.dvc"
+      - dvc.lock
+      - dvc.yaml
+      - src/hotel_booking/config.py
+      - src/hotel_booking/data.py
+      - src/hotel_booking/validation.py
+      - .github/workflows/data_changed.yaml
+  pull_request:
+    branches: [main, develop]
+    paths: *data_paths
+  workflow_dispatch:
+
+concurrency:
+  group: data-changed-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  data:
+    name: Pull, rebuild and validate the data
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --locked --dev
+
+      - name: Check the DagsHub secrets
+        env:
+          DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
+          DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
+        run: |
+          if [ -z "$DAGSHUB_USERNAME" ] || [ -z "$DAGSHUB_TOKEN" ]; then
+            echo "::error::Set DAGSHUB_USERNAME and DAGSHUB_TOKEN in Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+          uv run dvc remote modify origin --local user "$DAGSHUB_USERNAME"
+          uv run dvc remote modify origin --local password "$DAGSHUB_TOKEN"
+
+      - name: Pull the raw dataset
+        run: uv run dvc pull --allow-missing data/raw/hotel_bookings.csv.dvc
+
+      - name: Rebuild the processed splits
+        run: uv run invoke preprocess-data
+
+      - name: Validate the processed splits
+        run: uv run invoke validate-data
+
+      - name: Upload the validation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: data-validation-report
+          path: reports/data_validation.json
+          if-no-files-found: ignore
+
+      - name: Run the data tests
+        run: uv run pytest tests/test_validation.py tests/test_data.py -q
