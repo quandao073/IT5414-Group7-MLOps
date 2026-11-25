@@ -58,3 +58,49 @@ def test_monthly_metrics_combines_rows_of_the_same_month(two_months: pd.DataFram
     """Two chunks with the same month are one row whose size is their sum."""
     table = durability.monthly_metrics(_LeadTimeModel(), pd.concat([two_months, two_months]))
     assert table["rows"].tolist() == [160, 160]
+
+
+FAST_SPEC = {
+    "name": "Logistic Regression",
+    "encoding": "onehot",
+    "half_life_days": None,
+    "booking_weights": False,
+    "pipeline": {},
+    "params": {"max_iter": 200},
+}
+
+
+@pytest.fixture
+def hotel_frame(sample: pd.DataFrame) -> pd.DataFrame:
+    """Both hotels and both labels in every subset, so ROC-AUC is always defined."""
+    frame = sample.iloc[:400].copy()
+    frame["hotel"] = np.where(np.arange(len(frame)) % 2 == 0, "City Hotel", "Resort Hotel")
+    frame[config.TARGET] = (np.arange(len(frame)) // 2) % 2
+    return frame
+
+
+def test_hotel_transfer_has_the_four_combinations(hotel_frame: pd.DataFrame) -> None:
+    """Every source/target pair is scored, the diagonal is in-domain and has no gap."""
+    table = durability.hotel_transfer_metrics(hotel_frame, hotel_frame, FAST_SPEC)
+    pairs = set(zip(table["source_hotel"], table["target_hotel"], strict=True))
+    assert pairs == {(source, target) for source in durability.HOTELS for target in durability.HOTELS}
+    diagonal = table[table["in_domain"]]
+    assert len(diagonal) == 2 and (diagonal["transfer_gap"] == 0).all()
+    assert table["roc_auc"].between(0, 1).all()
+
+
+def test_hotel_transfer_skips_a_hotel_with_one_class(hotel_frame: pd.DataFrame) -> None:
+    """A degenerate hotel is left out; the remaining pairs still produce a table."""
+    frame = hotel_frame.copy()
+    frame.loc[frame["hotel"] == "Resort Hotel", config.TARGET] = 0
+    table = durability.hotel_transfer_metrics(frame, frame, FAST_SPEC)
+    assert set(table["source_hotel"]) == {"City Hotel"}
+
+
+def test_hotel_transfer_handles_a_category_seen_in_one_hotel_only(hotel_frame: pd.DataFrame) -> None:
+    """A category absent from the source hotel must not break prediction on the target hotel."""
+    frame = hotel_frame.copy()
+    city = frame["hotel"] == "City Hotel"
+    frame.loc[city & (frame["meal"] == "HB"), "meal"] = "SC"
+    table = durability.hotel_transfer_metrics(frame, frame, FAST_SPEC)
+    assert len(table) == 4

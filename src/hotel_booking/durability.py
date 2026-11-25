@@ -10,12 +10,26 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import average_precision_score, roc_auc_score
 
-from hotel_booking.config import RANDOM_STATE, TARGET, TIME_COLUMN
+from hotel_booking.config import MODEL_INPUT_COLUMNS, RANDOM_STATE, TARGET, TIME_COLUMN
+from hotel_booking.evaluate import binary_metrics
+from hotel_booking.model import ModelSpec, build_from_spec
 
 MONTH_FORMAT = "%Y-%m"
 BOOTSTRAP_ROUNDS = 500
 CONFIDENCE = 95.0
+HOTELS = ("City Hotel", "Resort Hotel")
+HOTEL_COLUMN = "hotel"
 METRIC_COLUMNS = ["month", "rows", "cancel_rate", "roc_auc", "ci_low", "ci_high", "average_precision"]
+TRANSFER_COLUMNS = [
+    "source_hotel",
+    "target_hotel",
+    "rows",
+    "cancel_rate",
+    "roc_auc",
+    "average_precision",
+    "in_domain",
+    "transfer_gap",
+]
 
 
 def bootstrap_roc_auc(
@@ -84,3 +98,55 @@ def monthly_metrics(model: Any, frame: pd.DataFrame) -> pd.DataFrame:
             }
         )
     return pd.DataFrame(rows, columns=METRIC_COLUMNS)
+
+
+def hotel_transfer_metrics(train: pd.DataFrame, test: pd.DataFrame, spec: ModelSpec) -> pd.DataFrame:
+    """Fit on one hotel and score every hotel, in-domain and transferred.
+
+    A source or target hotel with no rows or a single class is skipped. The gap is the source hotel's in-domain
+    ROC-AUC minus the row's ROC-AUC, zero on the diagonal and missing when the diagonal was skipped.
+
+    Args:
+        train: Labelled rows used to fit the model.
+        test: Labelled rows used to score it.
+        spec: Model recipe passed to `build_from_spec`.
+
+    Returns:
+        One row per source/target hotel pair.
+    """
+    rows = []
+    diagonal = {}
+    for source in HOTELS:
+        source_train = train[train[HOTEL_COLUMN] == source]
+        if source_train.empty or source_train[TARGET].nunique() < 2:
+            continue
+        model = build_from_spec(spec)
+        model.fit(source_train[MODEL_INPUT_COLUMNS], source_train[TARGET])
+        for target in HOTELS:
+            target_test = test[test[HOTEL_COLUMN] == target]
+            if target_test.empty or target_test[TARGET].nunique() < 2:
+                continue
+            proba = model.predict_proba(target_test[MODEL_INPUT_COLUMNS])[:, 1]
+            metrics = binary_metrics(target_test[TARGET], proba)
+            if source == target:
+                diagonal[source] = metrics["roc_auc"]
+            rows.append(
+                {
+                    "source_hotel": source,
+                    "target_hotel": target,
+                    "rows": len(target_test),
+                    "cancel_rate": float(target_test[TARGET].mean()),
+                    "roc_auc": metrics["roc_auc"],
+                    "average_precision": metrics["average_precision"],
+                    "in_domain": source == target,
+                }
+            )
+    table = pd.DataFrame(rows, columns=TRANSFER_COLUMNS[:-1])
+    gaps = []
+    for row in table.itertuples():
+        if row.in_domain:
+            gaps.append(0.0)
+        else:
+            gaps.append(diagonal.get(row.source_hotel, float("nan")) - row.roc_auc)
+    table["transfer_gap"] = gaps
+    return table
