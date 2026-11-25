@@ -158,12 +158,12 @@ def hotel_transfer_metrics(train: pd.DataFrame, test: pd.DataFrame, spec: ModelS
                 }
             )
     table = pd.DataFrame(rows, columns=TRANSFER_COLUMNS[:-1])
-    gaps = []
-    for row in table.itertuples():
-        if row.in_domain:
+    gaps: list[float] = []
+    for source, in_domain, roc_auc in zip(table["source_hotel"], table["in_domain"], table["roc_auc"], strict=True):
+        if bool(in_domain):
             gaps.append(0.0)
         else:
-            gaps.append(diagonal.get(row.source_hotel, float("nan")) - row.roc_auc)
+            gaps.append(float(diagonal.get(str(source), float("nan")) - float(roc_auc)))
     table["transfer_gap"] = gaps
     return table
 
@@ -252,7 +252,7 @@ def render_transfer_figure(table: pd.DataFrame, path: Path) -> Path:
     ax.set_ylim(0, 1)
     ax.set_ylabel("ROC-AUC")
     ax.set_title("ROC-AUC when the hotel changes")
-    ax.legend(title="Source hotel")
+    ax.legend(title="Source hotel", loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=2, frameon=False)
     fig.tight_layout()
     fig.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(fig)
@@ -295,7 +295,7 @@ def main(
     combined = pd.concat([monthly_long, transfer_long], ignore_index=True).reindex(columns=CSV_COLUMNS)
     combined.to_csv(report_dir / "metrics.csv", index=False)
     summary = {
-        "model": spec["name"],
+        "model": spec.get("name") or "Soft-voting ensemble",
         "spec": str(spec_path),
         "monthly": monthly.to_dict(orient="records"),
         "hotel_transfer": transfer.to_dict(orient="records"),
