@@ -1,6 +1,10 @@
+import json
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
+import yaml
 
 from hotel_booking import config, durability
 
@@ -104,3 +108,62 @@ def test_hotel_transfer_handles_a_category_seen_in_one_hotel_only(hotel_frame: p
     frame.loc[city & (frame["meal"] == "HB"), "meal"] = "SC"
     table = durability.hotel_transfer_metrics(frame, frame, FAST_SPEC)
     assert len(table) == 4
+
+
+@pytest.fixture(scope="module")
+def processed(tmp_path_factory: pytest.TempPathFactory, sample: pd.DataFrame) -> Path:
+    """Three split files with controlled dates, both hotels and both labels."""
+    root = tmp_path_factory.mktemp("durability")
+    frame = sample.copy()
+    frame["hotel"] = np.where(np.arange(len(frame)) % 2 == 0, "City Hotel", "Resort Hotel")
+    frame[config.TARGET] = (np.arange(len(frame)) % 3 == 0).astype(int)
+    train = frame.iloc[:500].copy()
+    train[config.TIME_COLUMN] = pd.Timestamp("2016-06-15")
+    stream = frame.iloc[500:].copy()
+    months = np.resize(np.array([f"2017-{month:02d}" for month in range(1, 9)]), len(stream))
+    stream[config.TIME_COLUMN] = pd.to_datetime([f"{month}-15" for month in months])
+    parts = {
+        "train": train,
+        "test": stream[stream[config.TIME_COLUMN].dt.month <= 4],
+        "production_holdout": stream[stream[config.TIME_COLUMN].dt.month > 4],
+    }
+    for name, part in parts.items():
+        part.to_csv(root / f"{name}.csv", index=False)
+    return root
+
+
+def test_render_monthly_figure_handles_a_single_month(tmp_path: Path) -> None:
+    """One month is enough to draw the figure."""
+    table = pd.DataFrame(
+        [{"month": "2017-01", "rows": 10, "cancel_rate": 0.3, "roc_auc": 0.8, "ci_low": 0.7, "ci_high": 0.9}]
+    )
+    path = durability.render_monthly_figure(table, tmp_path / "month.png")
+    assert path.stat().st_size > 0
+
+
+def test_render_transfer_figure_handles_missing_pairs(tmp_path: Path) -> None:
+    """A table with only the City pairs still renders."""
+    table = pd.DataFrame(
+        [
+            {"source_hotel": "City Hotel", "target_hotel": "City Hotel", "in_domain": True, "roc_auc": 0.8},
+            {"source_hotel": "City Hotel", "target_hotel": "Resort Hotel", "in_domain": False, "roc_auc": 0.7},
+        ]
+    )
+    path = durability.render_transfer_figure(table, tmp_path / "transfer.png")
+    assert path.stat().st_size > 0
+
+
+def test_main_writes_metrics_summary_and_figures(processed: Path, tmp_path: Path) -> None:
+    """The CLI writes both tables, both figures and a summary that matches the CSV."""
+    spec_path = tmp_path / "spec.yaml"
+    spec_path.write_text(yaml.safe_dump(FAST_SPEC), encoding="utf-8")
+    report_dir, figure_dir = tmp_path / "report", tmp_path / "figures"
+    durability.main(processed, report_dir, figure_dir, spec_path)
+    summary = json.loads((report_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["model"] == "Logistic Regression"
+    assert summary["monthly"] and all(row["month"].startswith("2017-") for row in summary["monthly"])
+    assert len(summary["hotel_transfer"]) == 4
+    for name in ("durability_roc_by_month.png", "durability_hotel_transfer.png"):
+        assert (figure_dir / name).stat().st_size > 0
+    metrics = pd.read_csv(report_dir / "metrics.csv")
+    assert len(metrics) == len(summary["monthly"]) + len(summary["hotel_transfer"])

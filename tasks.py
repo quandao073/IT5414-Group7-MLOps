@@ -31,6 +31,12 @@ def drift_report(ctx: Context) -> None:
 
 
 @task
+def durability_report(ctx: Context) -> None:
+    """Score the champion per 2017 month and across hotels, writing figures into reports/figures."""
+    ctx.run(f"uv run src/{PROJECT_NAME}/durability.py", echo=True, pty=not WINDOWS)
+
+
+@task
 def train(ctx: Context) -> None:
     """Train model."""
     ctx.run(f"uv run src/{PROJECT_NAME}/train.py", echo=True, pty=not WINDOWS)
