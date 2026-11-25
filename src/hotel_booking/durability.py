@@ -100,7 +100,7 @@ def monthly_metrics(model: Any, frame: pd.DataFrame) -> pd.DataFrame:
         y_true = group[TARGET].to_numpy()
         if len(np.unique(y_true)) < 2:
             continue
-        proba = model.predict_proba(group)[:, 1]
+        proba = model.predict_proba(group[MODEL_INPUT_COLUMNS])[:, 1]
         roc_auc, ci_low, ci_high = bootstrap_roc_auc(y_true, proba)
         rows.append(
             {
@@ -183,6 +183,8 @@ def render_monthly_figure(table: pd.DataFrame, path: Path) -> Path:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
+    if table.empty:
+        raise ValueError("No monthly metrics to plot.")
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     fig, (left, right) = plt.subplots(1, 2, figsize=(13, 5))
@@ -282,7 +284,13 @@ def main(
     holdout = read_split(Path(processed_dir), "production_holdout")
     model = build_from_spec(spec)
     model.fit(train[MODEL_INPUT_COLUMNS], train[TARGET])
-    monthly = monthly_metrics(model, pd.concat([test, holdout], ignore_index=True))
+    stream = pd.concat([test, holdout], ignore_index=True)
+    monthly = monthly_metrics(model, stream)
+    if monthly.empty:
+        raise ValueError("No arrival month has both classes; the durability report would be empty.")
+    all_months = sorted(pd.to_datetime(stream[TIME_COLUMN]).dt.strftime(MONTH_FORMAT).unique())
+    scored_months = set(monthly["month"])
+    skipped_months = [month for month in all_months if month not in scored_months]
     transfer = hotel_transfer_metrics(train, test, spec)
     report_dir = Path(report_dir)
     figure_dir = Path(figure_dir)
@@ -298,6 +306,7 @@ def main(
         "model": spec.get("name") or "Soft-voting ensemble",
         "spec": str(spec_path),
         "monthly": monthly.to_dict(orient="records"),
+        "skipped_months": skipped_months,
         "hotel_transfer": transfer.to_dict(orient="records"),
     }
     (report_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")

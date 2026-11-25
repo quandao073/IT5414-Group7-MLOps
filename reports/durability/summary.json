@@ -75,6 +75,7 @@
       "average_precision": 0.7032988168168507
     }
   ],
+  "skipped_months": [],
   "hotel_transfer": [
     {
       "source_hotel": "City Hotel",

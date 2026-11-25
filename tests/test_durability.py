@@ -17,6 +17,23 @@ class _LeadTimeModel:
         return np.column_stack([1 - score, score])
 
 
+class _StrictModel:
+    """Fail when the label or an identifier reaches the model."""
+
+    def predict_proba(self, frame: pd.DataFrame) -> np.ndarray:
+        assert config.TARGET not in frame.columns
+        assert "booking_id" not in frame.columns
+        return _LeadTimeModel().predict_proba(frame)
+
+
+def _write_splits(root: Path, train: pd.DataFrame, test: pd.DataFrame, holdout: pd.DataFrame) -> Path:
+    """Write the three processed splits the CLI reads."""
+    root.mkdir(parents=True, exist_ok=True)
+    for name, part in {"train": train, "test": test, "production_holdout": holdout}.items():
+        part.to_csv(root / f"{name}.csv", index=False)
+    return root
+
+
 @pytest.fixture
 def two_months(sample: pd.DataFrame) -> pd.DataFrame:
     """Two labelled months built from the cleaned synthetic bookings."""
@@ -62,6 +79,12 @@ def test_monthly_metrics_combines_rows_of_the_same_month(two_months: pd.DataFram
     """Two chunks with the same month are one row whose size is their sum."""
     table = durability.monthly_metrics(_LeadTimeModel(), pd.concat([two_months, two_months]))
     assert table["rows"].tolist() == [160, 160]
+
+
+def test_monthly_metrics_scores_only_the_model_inputs(two_months: pd.DataFrame) -> None:
+    """The label and identifiers never reach the model."""
+    table = durability.monthly_metrics(_StrictModel(), two_months)
+    assert len(table) == 2
 
 
 FAST_SPEC = {
@@ -110,6 +133,27 @@ def test_hotel_transfer_handles_a_category_seen_in_one_hotel_only(hotel_frame: p
     assert len(table) == 4
 
 
+def test_hotel_transfer_gap_is_missing_when_the_diagonal_was_skipped(hotel_frame: pd.DataFrame) -> None:
+    """A source whose in-domain score is undefined leaves its transfer gap missing."""
+    test = hotel_frame.copy()
+    test.loc[test["hotel"] == "City Hotel", config.TARGET] = 0
+    table = durability.hotel_transfer_metrics(hotel_frame, test, FAST_SPEC)
+    pairs = set(zip(table["source_hotel"], table["target_hotel"], strict=True))
+    assert pairs == {("City Hotel", "Resort Hotel"), ("Resort Hotel", "Resort Hotel")}
+    assert np.isnan(table.loc[~table["in_domain"], "transfer_gap"].iloc[0])
+    assert table.loc[table["in_domain"], "transfer_gap"].iloc[0] == 0.0
+
+
+def test_hotel_transfer_skips_a_hotel_missing_from_a_split(hotel_frame: pd.DataFrame) -> None:
+    """A hotel absent from train or test contributes no pair."""
+    train = hotel_frame[hotel_frame["hotel"] == "City Hotel"]
+    table = durability.hotel_transfer_metrics(train, hotel_frame, FAST_SPEC)
+    assert set(table["source_hotel"]) == {"City Hotel"} and len(table) == 2
+    test = hotel_frame[hotel_frame["hotel"] == "City Hotel"]
+    table = durability.hotel_transfer_metrics(hotel_frame, test, FAST_SPEC)
+    assert set(table["target_hotel"]) == {"City Hotel"} and len(table) == 2
+
+
 @pytest.fixture(scope="module")
 def processed(tmp_path_factory: pytest.TempPathFactory, sample: pd.DataFrame) -> Path:
     """Three split files with controlled dates, both hotels and both labels."""
@@ -141,6 +185,12 @@ def test_render_monthly_figure_handles_a_single_month(tmp_path: Path) -> None:
     assert path.stat().st_size > 0
 
 
+def test_render_monthly_figure_rejects_an_empty_table(tmp_path: Path) -> None:
+    """An empty table is an error, not a blank figure."""
+    with pytest.raises(ValueError, match="No monthly metrics"):
+        durability.render_monthly_figure(pd.DataFrame(columns=durability.METRIC_COLUMNS), tmp_path / "month.png")
+
+
 def test_render_transfer_figure_handles_missing_pairs(tmp_path: Path) -> None:
     """A table with only the City pairs still renders."""
     table = pd.DataFrame(
@@ -167,3 +217,42 @@ def test_main_writes_metrics_summary_and_figures(processed: Path, tmp_path: Path
         assert (figure_dir / name).stat().st_size > 0
     metrics = pd.read_csv(report_dir / "metrics.csv")
     assert len(metrics) == len(summary["monthly"]) + len(summary["hotel_transfer"])
+
+
+def test_main_rejects_a_report_without_a_scorable_month(tmp_path: Path, sample: pd.DataFrame) -> None:
+    """A stream with one class per month raises instead of committing an empty report."""
+    frame = sample.iloc[:200].copy()
+    frame["hotel"] = np.where(np.arange(len(frame)) % 2 == 0, "City Hotel", "Resort Hotel")
+    frame[config.TARGET] = (np.arange(len(frame)) // 2) % 2
+    train = frame.iloc[:100].copy()
+    train[config.TIME_COLUMN] = pd.Timestamp("2016-06-15")
+    stream = frame.iloc[100:].copy()
+    stream[config.TARGET] = 0
+    test = stream.iloc[:50].copy()
+    test[config.TIME_COLUMN] = pd.Timestamp("2017-01-15")
+    holdout = stream.iloc[50:].copy()
+    holdout[config.TIME_COLUMN] = pd.Timestamp("2017-02-15")
+    root = _write_splits(tmp_path / "processed", train, test, holdout)
+    spec_path = tmp_path / "spec.yaml"
+    spec_path.write_text(yaml.safe_dump(FAST_SPEC), encoding="utf-8")
+    with pytest.raises(ValueError, match="both classes"):
+        durability.main(root, tmp_path / "report", tmp_path / "figures", spec_path)
+
+
+def test_main_records_months_with_a_single_class(processed: Path, tmp_path: Path) -> None:
+    """A month left out of the table is named in the summary."""
+    root = tmp_path / "processed"
+    root.mkdir()
+    for name in ("train", "test", "production_holdout"):
+        frame = pd.read_csv(processed / f"{name}.csv")
+        if name == "test":
+            february = pd.to_datetime(frame[config.TIME_COLUMN]).dt.month == 2
+            frame.loc[february, config.TARGET] = 0
+        frame.to_csv(root / f"{name}.csv", index=False)
+    spec_path = tmp_path / "spec.yaml"
+    spec_path.write_text(yaml.safe_dump(FAST_SPEC), encoding="utf-8")
+    report_dir = tmp_path / "report"
+    durability.main(root, report_dir, tmp_path / "figures", spec_path)
+    summary = json.loads((report_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["skipped_months"] == ["2017-02"]
+    assert "2017-02" not in [row["month"] for row in summary["monthly"]]

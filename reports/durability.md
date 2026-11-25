@@ -11,7 +11,9 @@ Sinh bằng `uv run invoke durability-report` từ `data/processed` với `confi
   artifact `models/model.joblib` vì file này không được commit.
 - **Theo tháng:** fit một lần trên train, chấm từng tháng đến của 2017 (01–04 thuộc `test`, 05–08 thuộc
   `production_holdout`) — đúng các batch mà replay phát vào API. ROC-AUC và average precision (AP) tính trên xác
-  suất huỷ; khoảng tin cậy 95% lấy bằng bootstrap phân vị, 500 lần lấy mẫu lại, seed 42.
+  suất huỷ; khoảng tin cậy 95% lấy bằng bootstrap phân vị, 500 lần lấy mẫu lại, seed 42. Tháng chỉ có một lớp
+  (không tính được ROC-AUC) bị bỏ và được ghi ở `skipped_months` trong `summary.json`; lần chạy này không có
+  tháng nào bị bỏ.
 - **Đổi khách sạn:** với mỗi cặp nguồn → đích trong {City Hotel, Resort Hotel}, fit trên `train` của khách sạn
   nguồn rồi chấm `test` của khách sạn đích. Ô trên đường chéo là in-domain (fit và chấm cùng khách sạn); ô ngoài
   đường chéo là transfer. `transfer_gap` = ROC-AUC in-domain của khách sạn nguồn − ROC-AUC transfer.
