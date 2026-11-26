@@ -31,6 +31,8 @@
       `models/model.joblib` with `models/model_card.json`.
     * `uv run invoke serve-api [--reload]` serves the API on port 8000; Swagger UI at `/docs`. After writing a new
       model to `models/`, `POST /reload` makes the running API serve it without a restart.
+    * `uv run invoke export-onnx` exports `models/model.joblib` to ONNX; `MODEL_BACKEND=onnx` serves it with ONNX
+      Runtime. `uv run invoke benchmark` compares both backends.
     * `uv run invoke replay [--months 2017-01,2017-02] [--delay 0.5]` replays the 2017 bookings into the API.
 * Contracts between modules (API schema, model artifact, replay data, environment variables, Docker) are in
     `docs/source/contracts.md`; follow them, or change them through a PR that updates that file.
