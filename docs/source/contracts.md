@@ -23,7 +23,7 @@
 | C7 | Endpoint `/reload` | Sẽ bổ sung | Training (DAG retrain) |
 | C8 | Backend ONNX | Sẽ bổ sung | Load test |
 | C9 | [Bảng log dự đoán và nhãn](#c9-bang-log-du-doan-va-nhan) | Đề xuất, SQL đã chạy thử, API chưa ghi | Drift, Training, Platform |
-| C10 | Metrics Prometheus | Sẽ bổ sung | Platform |
+| C10 | [Metrics Prometheus](#c10-metrics-prometheus) | Đề xuất, đã có code | Platform |
 | C11 | [Service trong docker compose](#c11-docker-compose) | Đề xuất, đã có `docker-compose.yml` | Platform, cả nhóm |
 | C12 | [Docker image](#c12-docker) | Đề xuất, đã có Dockerfile | Platform, Training |
 | C13 | Checklist demo | Sẽ bổ sung | Cả nhóm |
@@ -199,6 +199,29 @@ vào log, không đưa vào mô hình.
 
 Kết nối: biến môi trường `DATABASE_URL` (ví dụ `postgresql+psycopg://user:password@postgres:5432/hotel`). Không
 có `DATABASE_URL` thì API vẫn chạy, chỉ không ghi log.
+
+## C10. Metrics Prometheus
+
+API expose metrics ở `GET /metrics` (định dạng text của Prometheus, không hiện trong Swagger). Mã nguồn:
+`src/hotel_booking/monitoring.py`.
+
+| Metric | Kiểu | Label | Ý nghĩa |
+|---|---|---|---|
+| `api_requests_total` | counter | `endpoint`, `status` | Số request theo route và mã trả về |
+| `api_request_latency_seconds` | histogram | `endpoint` | Thời gian trả lời, bucket 5 ms – 10 s |
+| `api_errors_total` | counter | `endpoint`, `type` | Request lỗi: `validation` (422), `unavailable` (503), `client` (4xx khác), `internal` (5xx khác) |
+| `api_prediction_probability` | histogram | – | Xác suất hủy của từng bản ghi được chấm, bucket 0,1 |
+| `api_predictions_total` | counter | `outcome` | Số bản ghi theo quyết định: `canceled`, `not_canceled` |
+| `api_input_warnings_total` | counter | `column`, `issue` | Số bản ghi có giá trị chưa gặp trong train (như `warnings` của C1) |
+| `api_model_info` | gauge | `model_version`, `backend` | Bằng 1 cho mô hình đang phục vụ; không có dòng nào khi chưa nạp mô hình |
+
+- `endpoint` là mẫu đường dẫn của route (`/predict`, `/predict/batch`...); đường dẫn không tồn tại gộp thành
+  `unmatched`, nên số giá trị label không tăng vô hạn.
+- Một request batch tính 1 lần trong `api_requests_total` nhưng N lần trong `api_prediction_probability`.
+- Metric nằm trong bộ nhớ của từng tiến trình API; khởi động lại thì counter về 0 (Prometheus xử lý bằng `rate`).
+
+Mẫu cho Platform: đoạn scrape `docs/examples/prometheus_scrape.yml`, PromQL cho panel và cảnh báo
+`docs/examples/grafana_queries.md`.
 
 ## C11. Docker compose
 
