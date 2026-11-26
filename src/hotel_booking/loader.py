@@ -4,6 +4,7 @@ Only the file source exists for now; the MLflow Registry source (contract C6) wi
 """
 
 import hashlib
+import io
 import json
 import os
 from dataclasses import dataclass
@@ -100,9 +101,11 @@ def served_from_folder(model_path: Path, card_path: Path, backend: str) -> Serve
     try:
         card = json.loads(card_path.read_text(encoding="utf-8"))
         expected = card.get("artifact_sha256")
-        if expected and file_sha256(model_path) != expected:
+        # Hash and load the same bytes, so a file replaced between the two steps cannot slip past the check.
+        data = model_path.read_bytes()
+        if expected and hashlib.sha256(data).hexdigest() != expected:
             raise ModelLoadError(f"{model_path} does not match artifact_sha256 of {card_path}.")
-        model = joblib.load(model_path)
+        model = joblib.load(io.BytesIO(data))
         if backend == "onnx":
             model = onnx_model(model, card, model_path.parent)
         return ServedModel(
@@ -140,9 +143,10 @@ def onnx_model(model: Any, card: dict[str, Any], folder: Path) -> Any:
     graphs = []
     for artifact in artifacts:
         path = folder / artifact["file"]
-        if not path.exists() or file_sha256(path) != artifact["sha256"]:
+        graph = path.read_bytes() if path.exists() else b""
+        if not graph or hashlib.sha256(graph).hexdigest() != artifact["sha256"]:
             raise ModelLoadError(f"{path} is missing or does not match its sha256 in the model card.")
-        graphs.append(path.read_bytes())
+        graphs.append(graph)
     return OnnxModel(model, graphs)
 
 
