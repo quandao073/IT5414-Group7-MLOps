@@ -1,0 +1,36 @@
+name: Airflow DAGs
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "airflow/**"
+      - "docker-compose.yml"
+      - ".github/workflows/airflow.yaml"
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "airflow/**"
+      - "docker-compose.yml"
+      - ".github/workflows/airflow.yaml"
+
+jobs:
+  dag-import:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      # Same image as docker-compose.yml, so DAGs are checked against the Airflow that runs them.
+      - name: Import every DAG with DagBag
+        run: |
+          image=$(grep -m1 -oE 'apache/airflow:[0-9.]+' docker-compose.yml)
+          docker run --rm -v "$PWD/airflow/dags:/opt/airflow/dags:ro" "$image" python -c '
+          import sys
+          from airflow.dag_processing.dagbag import DagBag
+          bag = DagBag(dag_folder="/opt/airflow/dags")
+          for path, error in bag.import_errors.items():
+              print(f"::error file={path}::{error.strip().splitlines()[-1]}")
+          print(f"{len(bag.dags)} DAG(s): {sorted(bag.dags)}; {len(bag.import_errors)} import error(s)")
+          sys.exit(1 if bag.import_errors or not bag.dags else 0)
+          '

@@ -1,0 +1,81 @@
+{
+  "target": "preprocess",
+  "label": "before",
+  "spec": null,
+  "runs": 3,
+  "wall_seconds": [
+    1.2856033999996725,
+    1.3083267000038177,
+    1.3029420000093523
+  ],
+  "wall_median": 1.3029420000093523,
+  "stages": {
+    "read_csv": 0.32341020001331344,
+    "clean_bookings": 0.18430239998269826,
+    "time_split": 0.06576379999751225,
+    "write_splits": 0.7201274000108242,
+    "input_schema": 0.013689900020835921
+  },
+  "profiled_total": 1.3912125999922864,
+  "functions": [
+    {
+      "name": "preprocess (data.py:253)",
+      "cumtime": 1.3887345,
+      "share": 0.9982187481681087
+    },
+    {
+      "name": "to_csv (generic.py:3783)",
+      "cumtime": 0.7620811000000001,
+      "share": 0.5477819134215902
+    },
+    {
+      "name": "to_csv (format.py:976)",
+      "cumtime": 0.7618147000000001,
+      "share": 0.5475904257941769
+    },
+    {
+      "name": "save (csvs.py:246)",
+      "cumtime": 0.7612527,
+      "share": 0.5471864616552644
+    },
+    {
+      "name": "_save (csvs.py:274)",
+      "cumtime": 0.7586159,
+      "share": 0.545291136670417
+    },
+    {
+      "name": "_save_body (csvs.py:307)",
+      "cumtime": 0.7584178,
+      "share": 0.5451487429054374
+    },
+    {
+      "name": "_save_chunk (csvs.py:317)",
+      "cumtime": 0.7368321000000001,
+      "share": 0.5296329978639394
+    },
+    {
+      "name": "load_raw (data.py:39)",
+      "cumtime": 0.3300638,
+      "share": 0.23724900134014748
+    },
+    {
+      "name": "read_csv (readers.py:349)",
+      "cumtime": 0.32992130000000003,
+      "share": 0.23714657271061898
+    },
+    {
+      "name": "_read (readers.py:258)",
+      "cumtime": 0.3298706,
+      "share": 0.23711012968242884
+    }
+  ],
+  "environment": {
+    "python": "3.12.15",
+    "platform": "Windows-11-10.0.26300-SP0",
+    "pandas": "3.0.6",
+    "numpy": "2.5.3",
+    "scikit-learn": "1.9.1",
+    "lightgbm": "4.7.0",
+    "xgboost": "3.4.1"
+  }
+}

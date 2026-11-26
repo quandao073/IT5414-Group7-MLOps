@@ -15,9 +15,128 @@ def preprocess_data(ctx: Context) -> None:
 
 
 @task
-def train(ctx: Context) -> None:
-    """Train model."""
-    ctx.run(f"uv run src/{PROJECT_NAME}/train.py", echo=True, pty=not WINDOWS)
+def validate_data(ctx: Context) -> None:
+    """Validate the processed splits with pandera and write reports/data_validation.json."""
+    ctx.run(
+        f"uv run src/{PROJECT_NAME}/validation.py data/processed reports/data_validation.json",
+        echo=True,
+        pty=not WINDOWS,
+    )
+
+
+@task
+def drift_report(ctx: Context) -> None:
+    """Write the Evidently drift reports (each 2017 month and City vs Resort Hotel) into reports/drift."""
+    ctx.run(f"uv run src/{PROJECT_NAME}/drift.py data/processed reports/drift", echo=True, pty=not WINDOWS)
+
+
+@task
+def train(ctx: Context, overrides: str = "") -> None:
+    """Train with Hydra and track in MLflow; overrides such as "model=logreg train.seed=7 train.register=true"."""
+    ctx.run(f"uv run src/{PROJECT_NAME}/train.py {overrides}", echo=True, pty=not WINDOWS)
+
+
+@task
+def evaluate(ctx: Context, split: str = "test") -> None:
+    """Print ROC-AUC, PR-AUC and F1 of models/model.joblib on a split."""
+    ctx.run(f"uv run src/{PROJECT_NAME}/evaluate.py --split {split}", echo=True, pty=not WINDOWS)
+
+
+@task
+def tune(ctx: Context, overrides: str = "") -> None:
+    """Tune LightGBM with Optuna (nested MLflow runs); overrides such as "hpo.n_trials=10"."""
+    ctx.run(f"uv run src/{PROJECT_NAME}/tune.py {overrides}", echo=True, pty=not WINDOWS)
+
+
+@task
+def retrain(ctx: Context, overrides: str = "") -> None:
+    """Retrain, register as challenger and promote if better; overrides such as "promotion.min_delta=0.002"."""
+    ctx.run(f"uv run src/{PROJECT_NAME}/retrain.py {overrides}", echo=True, pty=not WINDOWS)
+
+
+@task
+def registry(ctx: Context, command: str = "show") -> None:
+    """Manage the MLflow Model Registry, e.g. "show", "promote --metric roc_auc", "set-alias champion 2"."""
+    ctx.run(f"uv run src/{PROJECT_NAME}/registry.py {command}", echo=True, pty=not WINDOWS)
+
+
+@task
+def durability_report(ctx: Context) -> None:
+    """Score the champion per 2017 month and across hotels, writing figures into reports/figures."""
+    ctx.run(f"uv run src/{PROJECT_NAME}/durability.py", echo=True, pty=not WINDOWS)
+
+
+@task
+def sample_model(ctx: Context, spec: str = "configs/model/logistic_regression.yaml") -> None:
+    """Train a model from a spec and save it with its card to models/ for the API."""
+    ctx.run(f"uv run src/{PROJECT_NAME}/sample_model.py --spec-path {spec}", echo=True, pty=not WINDOWS)
+
+
+@task
+def export_onnx(ctx: Context) -> None:
+    """Export models/model.joblib to ONNX, check it against joblib and record it in the model card."""
+    ctx.run(f"uv run src/{PROJECT_NAME}/onnx_export.py", echo=True, pty=not WINDOWS)
+
+
+@task
+def benchmark(ctx: Context) -> None:
+    """Compare joblib and ONNX latency, throughput and artifact size on the test split."""
+    ctx.run(f"uv run src/{PROJECT_NAME}/benchmark.py", echo=True, pty=not WINDOWS)
+
+
+@task
+def serve_api(ctx: Context, port: int = 8000, reload: bool = False) -> None:
+    """Serve the prediction API locally; Swagger UI at /docs."""
+    flags = " --reload" if reload else ""
+    ctx.run(f"uv run uvicorn {PROJECT_NAME}.api:app --port {port}{flags}", echo=True, pty=not WINDOWS)
+
+
+@task
+def serve_drift(ctx: Context, port: int = 8001, reload: bool = False) -> None:
+    """Serve the drift detection service locally (needs DATABASE_URL); Swagger UI at /docs."""
+    flags = " --reload" if reload else ""
+    ctx.run(f"uv run uvicorn {PROJECT_NAME}.drift_service:app --port {port}{flags}", echo=True, pty=not WINDOWS)
+
+
+@task
+def serve_frontend(ctx: Context, port: int = 8501) -> None:
+    """Serve the Streamlit frontend locally."""
+    ctx.run(f"uv run streamlit run src/{PROJECT_NAME}/frontend.py --server.port {port}", echo=True, pty=not WINDOWS)
+
+
+@task
+def replay(ctx: Context, api_url: str = "http://localhost:8000", months: str = "", delay: float = 0.0) -> None:
+    """Replay the 2017 bookings month by month into the API and release each month's labels."""
+    ctx.run(
+        f'uv run src/{PROJECT_NAME}/replay.py --api-url {api_url} --months "{months}" --delay {delay}',
+        echo=True,
+        pty=not WINDOWS,
+    )
+
+
+@task
+def profile(
+    ctx: Context,
+    target: str = "preprocess",
+    label: str = "before",
+    spec: str = "configs/model/logistic_regression.yaml",
+    runs: int = 3,
+) -> None:
+    """Profile preprocessing or training and write a JSON summary under reports/profile.
+
+    The file name is `preprocess-<label>.json` for preprocessing and `train-<spec>-<label>.json` for training.
+    """
+    ctx.run(
+        f"uv run src/{PROJECT_NAME}/profiling.py --target {target} --label {label} --spec {spec} --runs {runs}",
+        echo=True,
+        pty=not WINDOWS,
+    )
+
+
+@task
+def profile_figures(ctx: Context) -> None:
+    """Render the before/after profiling figures into reports/figures."""
+    ctx.run(f"uv run src/{PROJECT_NAME}/profiling.py --figures", echo=True, pty=not WINDOWS)
 
 
 @task
@@ -37,6 +156,11 @@ def docker_build(ctx: Context, progress: str = "plain") -> None:
     )
     ctx.run(
         f"docker build -t api:latest . -f dockerfiles/api.dockerfile --progress={progress}", echo=True, pty=not WINDOWS
+    )
+    ctx.run(
+        f"docker build -t drift:latest . -f dockerfiles/drift.dockerfile --progress={progress}",
+        echo=True,
+        pty=not WINDOWS,
     )
 
 

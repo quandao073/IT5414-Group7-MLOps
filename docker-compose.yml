@@ -1,0 +1,188 @@
+# Local stack: `docker compose up -d --build`. Credentials come from `.env` (see `.env.example`);
+# the defaults below are for local use only.
+name: hotel-booking
+
+x-postgres-env: &postgres-env
+  POSTGRES_USER: ${POSTGRES_USER:-mlops}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mlops}
+
+x-s3-env: &s3-env
+  AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-mlops}
+  AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-mlops-secret}
+
+# Airflow 3 with LocalExecutor on the shared PostgreSQL. The image has no project dependencies: DAGs only
+# orchestrate and call the services (or run project images), so Airflow and the project never share a venv.
+x-airflow: &airflow
+  image: apache/airflow:3.4.0
+  user: "50000:0"
+  environment:
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-mlops}:${POSTGRES_PASSWORD:-mlops}@postgres:5432/airflow
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
+    AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET:-local-only-jwt-secret}
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    # Local demo: no login, every visitor of http://localhost:8080 is admin.
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - airflow-logs:/opt/airflow/logs
+  depends_on: &airflow-depends
+    postgres: {condition: service_healthy}
+    airflow-init: {condition: service_completed_successfully}
+  restart: unless-stopped
+
+services:
+  # Prediction API (1.4.1). Serves models/model.joblib until the registry loader lands (1.4.4).
+  api:
+    build:
+      context: .
+      dockerfile: dockerfiles/api.dockerfile
+    ports: ["8000:8000"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mlops}:${POSTGRES_PASSWORD:-mlops}@postgres:5432/hotel
+    volumes:
+      - ./models:/app/models:ro
+    depends_on:
+      postgres: {condition: service_healthy}
+    restart: unless-stopped
+
+  # Streamlit frontend (1.4.3); it calls the API over the compose network.
+  frontend:
+    build:
+      context: .
+      dockerfile: dockerfiles/frontend.dockerfile
+    ports: ["8501:8501"]
+    environment:
+      API_URL: http://api:8000
+    depends_on:
+      api: {condition: service_healthy}
+    restart: unless-stopped
+
+  # PostgreSQL: MLflow, Airflow and prediction-log databases (infra/postgres/init.sql).
+  postgres:
+    image: postgres:17.6-bookworm
+    environment: *postgres-env
+    ports: ["5432:5432"]
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      # Over TCP: on the first start the init scripts run while only the unix socket is open.
+      test: ["CMD-SHELL", "pg_isready -h localhost -U $${POSTGRES_USER} -d hotel"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  # SeaweedFS: S3-compatible store for MLflow artifacts and the local DVC remote. Only the S3 port is published.
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.54
+    command: server -s3 -dir=/data -master.telemetry=false
+    environment: *s3-env
+    ports: ["8333:8333"]
+    volumes:
+      - seaweedfs-data:/data
+    restart: unless-stopped
+
+  # One-shot job: create the `mlflow` and `dvc` buckets.
+  storage-init:
+    build:
+      context: .
+      dockerfile: dockerfiles/mlflow.dockerfile
+    environment: *s3-env
+    entrypoint:
+      - python
+      - -c
+      - |
+        import time, boto3, botocore
+        s3 = boto3.client("s3", endpoint_url="http://seaweedfs:8333", region_name="us-east-1")
+        for attempt in range(60):
+            try:
+                existing = {b["Name"] for b in s3.list_buckets()["Buckets"]}
+                break
+            except (botocore.exceptions.EndpointConnectionError, botocore.exceptions.ConnectionClosedError):
+                time.sleep(2)
+        else:
+            raise SystemExit("SeaweedFS S3 did not come up")
+        for bucket in ("mlflow", "dvc"):
+            if bucket not in existing:
+                s3.create_bucket(Bucket=bucket)
+        print("buckets ready:", sorted(existing | {"mlflow", "dvc"}))
+    depends_on: [seaweedfs]
+    restart: "no"
+
+  # MLflow tracking server and Model Registry. Clients only need MLFLOW_TRACKING_URI=http://localhost:5000:
+  # artifacts are proxied (--serve-artifacts), so no S3 credentials are needed on the client side.
+  mlflow:
+    build:
+      context: .
+      dockerfile: dockerfiles/mlflow.dockerfile
+    environment:
+      <<: *s3-env
+      MLFLOW_S3_ENDPOINT_URL: http://seaweedfs:8333
+      BACKEND_STORE_URI: postgresql+psycopg2://${POSTGRES_USER:-mlops}:${POSTGRES_PASSWORD:-mlops}@postgres:5432/mlflow
+    command:
+      - sh
+      - -c
+      - >-
+        mlflow server --host 0.0.0.0 --port 5000
+        --backend-store-uri "$$BACKEND_STORE_URI"
+        --artifacts-destination s3://mlflow
+        --serve-artifacts
+        --allowed-hosts "localhost:5000,127.0.0.1:5000,mlflow:5000"
+    ports: ["5000:5000"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      storage-init: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  # One-shot job: create or upgrade the Airflow metadata database.
+  airflow-init:
+    <<: *airflow
+    command: db migrate
+    depends_on:
+      postgres: {condition: service_healthy}
+    restart: "no"
+
+  # Airflow UI and REST/execution API (Airflow 3 replaces the webserver with the api-server).
+  airflow-apiserver:
+    <<: *airflow
+    command: api-server
+    ports: ["8080:8080"]
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/version"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+
+  airflow-scheduler:
+    <<: *airflow
+    command: scheduler
+    depends_on:
+      <<: *airflow-depends
+      airflow-apiserver: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname \"$${HOSTNAME}\""]
+      interval: 30s
+      timeout: 30s
+      retries: 10
+
+  airflow-dag-processor:
+    <<: *airflow
+    command: dag-processor
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type DagProcessorJob --hostname \"$${HOSTNAME}\""]
+      interval: 30s
+      timeout: 30s
+      retries: 10
+
+volumes:
+  postgres-data:
+  seaweedfs-data:
+  airflow-logs:

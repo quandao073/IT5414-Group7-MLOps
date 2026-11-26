@@ -13,8 +13,49 @@
     * To lint code, use `uv run ruff check . --fix`.
 * The project uses `invoke` for task management. To see available tasks, use `uv run invoke --list` or refer to the
     `tasks.py` file.
+* The project uses `dvc` to version data. The raw dataset is tracked by `data/raw/hotel_bookings.csv.dvc`;
+    fetch it with `uv run dvc pull` and never commit files under `data/` to git.
+* `dvc.yaml` defines the data pipeline `prepare → validate → drift`; run it with `uv run dvc repro` and share the
+    outputs with `uv run dvc push`. Each stage also has an invoke task:
+    * `uv run invoke preprocess-data` writes `data/processed`.
+    * `uv run invoke validate-data` checks the splits with pandera and writes `reports/data_validation.json`.
+    * `uv run invoke drift-report` writes the Evidently reports and `summary.csv/json` into `reports/drift/`.
+    * `uv run invoke durability-report` fits the champion spec on train and writes monthly and cross-hotel ROC-AUC
+      into `reports/durability/` plus the figures in `reports/figures/`.
+* `uv run invoke serve-drift [--reload]` serves the drift detection service on port 8001 (needs `DATABASE_URL`);
+    the Airflow DAG `airflow/dags/monitor_drift.py` calls it. See contract C14 in `docs/source/contracts.md`.
 * The project uses `pre-commit` for managing pre-commit hooks. To run all hooks on all files, use
     `uv run pre-commit run --all-files`. For more information, refer to the `.pre-commit-config.yaml` file.
+* The project has a Streamlit frontend. Run it with `uv run invoke serve-frontend` (needs the API from
+  `uv run invoke serve-api` and `API_URL` set, default `http://localhost:8000`).
+* Training commands (Hydra configs in `configs/`, MLflow tracking via `MLFLOW_TRACKING_URI`, local `mlruns/` if unset):
+    * `uv run invoke train [--overrides "model=logreg train.seed=7 train.register=true train.tracking=false"]`
+      trains `configs/model/<model>.yaml`, logs params, metrics, confusion matrix and feature importance to MLflow
+      and saves `models/model.joblib` with `models/model_card.json`.
+    * `uv run invoke evaluate [--split test]` prints ROC-AUC, PR-AUC and F1 of `models/model.joblib`.
+    * `uv run invoke tune [--overrides "hpo.n_trials=10"]` tunes LightGBM with Optuna (nested MLflow runs) and writes
+      `configs/model/lgbm_tuned.yaml`.
+    * `uv run invoke retrain [--overrides "promotion.min_delta=0.002"]` trains, registers the model as `challenger` and
+      promotes it to `champion` when its `promotion.metric` beats the champion by `promotion.min_delta`.
+    * `uv run invoke registry --command "show|promote --metric roc_auc|set-alias champion 2"` manages the
+      `champion`/`challenger` aliases (contract C6).
+* Serving (FastAPI) commands:
+    * `uv run invoke sample-model [--spec configs/model/<name>.yaml]` trains a model on `data/processed` and saves
+      `models/model.joblib` with `models/model_card.json`.
+    * `uv run invoke serve-api [--reload]` serves the API on port 8000; Swagger UI at `/docs`. After writing a new
+      model to `models/`, `POST /reload` makes the running API serve it without a restart.
+    * `uv run invoke export-onnx` exports `models/model.joblib` to ONNX; `MODEL_BACKEND=onnx` serves it with ONNX
+      Runtime. `uv run invoke benchmark` compares both backends.
+    * `uv run invoke replay [--months 2017-01,2017-02] [--delay 0.5]` replays the 2017 bookings into the API.
+      With `DATABASE_URL` set, the API logs every prediction and the replay writes labels to PostgreSQL.
+* Contracts between modules (API schema, model artifact, replay data, environment variables, Docker) are in
+    `docs/source/contracts.md`; follow them, or change them through a PR that updates that file.
+* Profiling commands:
+    * `uv run invoke profile --target {preprocess,train} --label <label> [--spec configs/model/<name>.yaml] [--runs N]`
+      writes `reports/profile/<stem>.json` and a gitignored `<stem>.prof`; the summaries are committed.
+    * `uv run invoke profile-figures` renders the before/after PNGs into `reports/figures/`.
+    * `uv run snakeviz reports/profile/<stem>.prof` opens one raw profile in the browser.
+    * `reports/profiling.md` records the measured before/after numbers and which optimisations were rejected.
 
 # Code style
 

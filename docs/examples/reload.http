@@ -1,0 +1,21 @@
+# POST /reload (contract C7 in docs/source/contracts.md).
+# Open in VS Code REST Client / JetBrains HTTP Client, or use the curl lines.
+
+### Reload the served model
+# curl -X POST http://localhost:8000/reload -H "X-Reload-Token: $RELOAD_TOKEN"
+POST http://localhost:8000/reload
+X-Reload-Token: {{reload_token}}
+
+### 200: a new version is served
+# {
+#   "previous_version": "logistic_regression-20261109081500",
+#   "current_version": "champion-20261116090000",
+#   "changed": true,
+#   "reloaded_at": "2026-11-16T09:00:05.123456Z"
+# }
+
+### 503: reload failed, the previous model is still served
+# {"detail": "Reload failed, previous model kept. models/model.joblib not found. Run `uv run invoke sample-model` first."}
+
+### Check the served version afterwards
+GET http://localhost:8000/health

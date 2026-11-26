@@ -1,0 +1,13 @@
+n_trials: 30
+timeout: null
+metric: roc_auc
+direction: maximize
+output_spec: configs/model/lgbm_tuned.yaml
+space:
+  n_estimators: {low: 200, high: 800, step: 100}
+  learning_rate: {low: 0.01, high: 0.1, log: true}
+  num_leaves: {low: 8, high: 64}
+  min_child_samples: {low: 20, high: 300}
+  subsample: {low: 0.5, high: 1.0}
+  colsample_bytree: {low: 0.3, high: 1.0}
+  reg_lambda: {low: 0.001, high: 10.0, log: true}

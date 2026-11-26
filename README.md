@@ -1,5 +1,8 @@
 # Hotel Booking Cancellation — MLOps Pipeline
 
+[![Unit Tests](https://github.com/quandao073/IT5414-Group7-MLOps/actions/workflows/tests.yaml/badge.svg?branch=develop)](https://github.com/quandao073/IT5414-Group7-MLOps/actions/workflows/tests.yaml)
+[![Code linting](https://github.com/quandao073/IT5414-Group7-MLOps/actions/workflows/linting.yaml/badge.svg?branch=develop)](https://github.com/quandao073/IT5414-Group7-MLOps/actions/workflows/linting.yaml)
+
 > Dự án môn **IT5414 – Vận hành hệ thống học máy** · Nhóm `07`
 > Dự báo khả năng một đặt phòng khách sạn bị hủy, được xây dựng và vận hành như một hệ thống học máy hoàn chỉnh: dữ liệu → huấn luyện → triển khai → giám sát.
 
@@ -36,7 +39,7 @@ Dự án được coi là thành công khi đạt được:
 | Quản lý môi trường & dependency | `uv`, `pyproject.toml`, `uv.lock` |
 | Cấu trúc dự án | cookiecutter |
 | Chất lượng mã | `ruff` (lint + format), type hints + `mypy`, `pre-commit` |
-| Phiên bản dữ liệu | DVC (remote: DagsHub khi phát triển, MinIO khi chạy bằng docker compose) |
+| Phiên bản dữ liệu | DVC (remote: DagsHub khi phát triển, SeaweedFS khi chạy bằng docker compose) |
 | Kiểm tra dữ liệu | pandera |
 | Cấu hình | Hydra |
 | Logging | `loguru` |
@@ -47,7 +50,7 @@ Dự án được coi là thành công khi đạt được:
 | CI/CD | GitHub Actions, CML |
 | Đóng gói & phục vụ | Docker, docker compose, FastAPI, ONNX Runtime |
 | Frontend | Streamlit |
-| Lưu trữ | PostgreSQL, MinIO |
+| Lưu trữ | PostgreSQL, SeaweedFS (S3) |
 | Giám sát | Evidently (data drift), `prometheus-client`, Prometheus, Grafana |
 | Tài liệu | MkDocs |
 
@@ -60,23 +63,26 @@ Dự án được coi là thành công khi đạt được:
 - Nhãn `is_canceled`: khoảng 37% đặt phòng bị hủy.
 - Dung lượng nhỏ (dưới 20 MB), phù hợp để chạy toàn bộ pipeline trên máy cá nhân.
 
-**Xử lý rò rỉ nhãn (data leakage):** loại bỏ `reservation_status` và `reservation_status_date` vì hai cột này mã hóa trực tiếp kết quả hủy. Các cột có thể thay đổi sau thời điểm đặt (`assigned_room_type`, `booking_changes`, `days_in_waiting_list`) sẽ được đánh giá lại để phù hợp với kịch bản "dự báo tại thời điểm đặt phòng".
+**Xử lý rò rỉ nhãn (data leakage):** loại bỏ `reservation_status` và `reservation_status_date` vì hai cột này mã hóa trực tiếp kết quả hủy. Các cột chỉ biết sau thời điểm đặt (`assigned_room_type`, `booking_changes`, `required_car_parking_spaces`, `country`) được giữ trong dữ liệu để phân tích nhưng không làm đầu vào mô hình. Mô hình nhận 25 cột gốc biết được lúc đặt phòng cộng `rooms_in_booking` (danh sách ở `src/hotel_booking/config.py`).
 
 **Chia dữ liệu theo thời gian để mô phỏng production:**
 
 - *Reference / train–validation:* các đặt phòng có ngày đến từ 07/2015 đến 12/2016.
 - *Production stream:* 01/2017 đến 08/2017, được "phát lại" theo từng tháng vào API để kiểm tra drift. Nhãn của mỗi tháng chỉ được mở sau khi tháng đó phát lại xong (mô phỏng độ trễ của nhãn) và được dùng để retrain.
+- *Đánh giá offline:* 4 tháng đầu của production stream (01–04/2017) là tập test khi chọn mô hình ở môn IT3190; 05–08/2017 là phần mô hình chưa từng thấy. `uv run invoke preprocess-data` ghi ba tập `train`, `test`, `production_holdout` và schema đầu vào vào `data/processed/`.
 - *Kịch bản drift bổ sung:* train trên một khách sạn và suy luận trên khách sạn còn lại để kiểm tra độ bền của mô hình.
 
-Dữ liệu thô và dữ liệu đã xử lý được quản lý phiên bản bằng DVC. Schema dữ liệu sau xử lý được kiểm tra trong unit test.
+Dữ liệu thô được quản lý phiên bản bằng DVC; dữ liệu đã xử lý không lưu trong git hay DVC mà được tạo lại từ dữ liệu thô bằng `uv run invoke preprocess-data`. Schema dữ liệu sau xử lý được kiểm tra trong unit test.
 
 ## 4. Mô hình
 
 | Vai trò | Mô hình | Ghi chú |
 |---|---|---|
-| Baseline | Logistic Regression | Mốc so sánh, dùng chung pipeline tiền xử lý |
-| Mô hình chính | TBD | Estimator tương thích scikit-learn, chọn theo kết quả đánh giá |
+| Baseline | Logistic Regression | Mốc so sánh, dùng chung pipeline tiền xử lý (`configs/model/logistic_regression.yaml`) |
+| Mô hình chính | Ensemble Random Forest + XGBoost + LightGBM | Chọn ở môn IT3190 theo CV theo quý 2016 (`configs/model/champion.yaml`) |
 | Thử nghiệm (tùy chọn) | PyTorch Tabular | So sánh với mô hình chính trên MLflow |
+
+Pipeline mô hình nhận bản ghi gốc: `BookingFeatureBuilder` tạo đặc trưng → `ColumnTransformer` (impute, one-hot) → estimator; mỗi thành viên ensemble được train với trọng số ưu tiên dữ liệu gần đây. Kết quả tham chiếu của champion ở IT3190 nằm trong `reports/it3190_model_card.json`: CV ROC-AUC 0,858; trên test 01–04/2017 ROC-AUC 0,865, PR-AUC 0,824, F1 0,689 tại ngưỡng 0,456.
 
 **Chỉ số đánh giá:**
 
@@ -88,6 +94,7 @@ Dữ liệu thô và dữ liệu đã xử lý được quản lý phiên bản 
 Toàn bộ hệ thống chạy local bằng Docker Desktop và `docker compose`, không triển khai lên cloud.
 
 - **Phát triển:** Python 3.12 + `uv` (phiên bản khóa trong `uv.lock`); `pre-commit` chạy `ruff` trước mỗi commit; `pytest` chạy local và trên GitHub Actions.
+- **Docker image:** mỗi lần merge vào `main`, workflow `Docker images` build và push `ghcr.io/quandao073/it5414-group7-mlops-api` và `ghcr.io/quandao073/it5414-group7-mlops-train` (tag `sha-<commit>` và `latest`). PR sửa `dockerfiles/` chỉ build để kiểm tra, không push.
 - **Dịch vụ dùng chung:** DagsHub cung cấp MLflow tracking server (kèm Model Registry) và DVC remote.
 - **Triển khai local:** các service dưới đây được tự host bằng `docker compose`, không phụ thuộc Internet.
 
@@ -96,7 +103,7 @@ Toàn bộ hệ thống chạy local bằng Docker Desktop và `docker compose`,
 | `api` | FastAPI + ONNX Runtime | Dự đoán, `/metrics`, nạp mô hình `champion` |
 | `frontend` | Streamlit | Giao diện nhập booking / upload CSV |
 | `mlflow` | MLflow | Tracking, Model Registry |
-| `minio` | MinIO | Artifact store, DVC remote (S3) |
+| `seaweedfs` | SeaweedFS | Artifact store MLflow, DVC remote (S3) |
 | `postgres` | PostgreSQL | Metadata Airflow/MLflow, log dự đoán |
 | `airflow-*` | Apache Airflow 3 | DAG `retrain`, `monitor_drift` |
 | `drift` | FastAPI + Evidently | Tính drift, xuất metrics drift |
@@ -111,8 +118,62 @@ cd IT5414-Group7-MLOps
 git switch develop
 uv sync                     # tạo .venv với Python 3.12 theo uv.lock
 uv run pre-commit install   # cài git hook (ruff, kiểm tra file)
+uv run dvc pull             # tải data/raw/hotel_bookings.csv
+uv run dvc repro            # pipeline dữ liệu: prepare → validate (pandera) → drift (Evidently)
 uv run invoke test          # chạy test kèm coverage
+uv run invoke serve-api        # cửa sổ 1: API tại http://localhost:8000
+uv run invoke serve-frontend   # cửa sổ 2: giao diện tại http://localhost:8501
+uv run invoke profile --target preprocess --label before --runs 3   # đo hiệu năng tiền xử lý
+uv run invoke profile-figures                                       # vẽ hình trước/sau vào reports/figures
 ```
+
+Giao diện Streamlit đọc `API_URL` (mặc định `http://localhost:8000`) và báo lỗi ngay trên sidebar khi API chưa chạy.
+
+Kết quả profiling (số đo trước/sau, nút thắt, các tối ưu đã thử) nằm trong [reports/profiling.md](reports/profiling.md); hình so sánh nằm trong `reports/figures/`.
+
+**Kết nối DagsHub** (MLflow tracking và DVC remote dùng chung, repo [dagshub.com/quandao073/IT5414-Group7-MLOps](https://dagshub.com/quandao073/IT5414-Group7-MLOps)). Làm một lần trên mỗi máy, trước `dvc pull`:
+
+1. Tạo tài khoản DagsHub, nhờ trưởng nhóm thêm làm collaborator, rồi tạo access token tại [dagshub.com/user/settings/tokens](https://dagshub.com/user/settings/tokens).
+2. Sao chép `.env.example` thành `.env`, điền `MLFLOW_TRACKING_USERNAME` (tên tài khoản) và `MLFLOW_TRACKING_PASSWORD` (token). Training đọc các biến này để log lên MLflow.
+3. Lưu tài khoản cho DVC vào `.dvc/config.local` (file này không được commit):
+
+   ```bash
+   uv run dvc remote modify origin --local user <dagshub-username>
+   uv run dvc remote modify origin --local password <dagshub-token>
+   ```
+
+CI đọc cùng thông tin đó từ hai repository secret `MLFLOW_TRACKING_USERNAME` và `MLFLOW_TRACKING_PASSWORD` (tài khoản và token DagsHub, dùng chung với MLflow; Settings → Secrets and variables → Actions).
+Token tạo tại [dagshub.com/user/settings/tokens](https://dagshub.com/user/settings/tokens); thiếu secret thì job dừng ngay với thông báo nêu tên secret.
+Workflow `data_changed.yaml` chạy `dvc pull`, sinh lại `data/processed`, validate bằng pandera rồi chạy test dữ liệu mỗi khi `**/*.dvc`, `dvc.lock` hay `dvc.yaml` thay đổi.
+
+**Chạy bằng docker compose** (Docker Desktop, không cần Internet sau lần build đầu). Danh sách service và cổng ở mục C11 của [contracts](docs/source/contracts.md):
+
+```bash
+docker compose up -d --build   # API :8000, Streamlit :8501, MLflow :5000, Airflow :8080, PostgreSQL :5432, SeaweedFS S3 :8333
+docker compose ps              # chờ các service báo healthy
+docker compose down            # dừng; thêm -v để xóa luôn dữ liệu PostgreSQL và SeaweedFS
+```
+
+- API nạp `models/model.joblib` (tạo bằng `uv run invoke sample-model`), sau khi tạo model thì chạy `docker compose restart api`.
+- Airflow UI tại http://localhost:8080 (bản local không cần đăng nhập). DAG nằm trong `airflow/dags/`, ví dụ `stack_health` gọi `/health` của API và MLflow. Image Airflow không cài dependency của dự án: DAG chỉ điều phối, code dự án chạy trong service hoặc image riêng.
+- Dùng MLflow tự host thay cho DagsHub: đặt `MLFLOW_TRACKING_URI=http://localhost:5000` trong `.env`.
+- DVC remote `local` trên SeaweedFS (key mặc định trong `.env.example`):
+
+  ```bash
+  uv run dvc remote modify local --local access_key_id mlops
+  uv run dvc remote modify local --local secret_access_key mlops-secret
+  uv run dvc push -r local   # hoặc dvc pull -r local
+  ```
+
+**Pipeline dữ liệu** (`dvc.yaml`): `prepare` chạy `data.py` sinh `data/processed`; `validate` kiểm tra từng split bằng pandera (đủ cột, không có cột leakage, khoảng giá trị, null, ngày đến nằm đúng cửa sổ của split) và dừng pipeline nếu có lỗi, kết quả ở `reports/data_validation.json`; `drift` so dữ liệu train với từng tháng 2017 và City Hotel với Resort Hotel bằng Evidently, ghi report HTML vào `reports/drift/html/` và bảng tỉ lệ cột bị drift vào `reports/drift/summary.csv`. Từng bước cũng chạy riêng được bằng `uv run invoke preprocess-data`, `validate-data`, `drift-report`. Sau khi `dvc repro`, chạy `uv run dvc push` để người khác `dvc pull` được cả dữ liệu đã xử lý. Kết quả và nhận xét drift: [reports/drift.md](reports/drift.md).
+
+**Drift service** (`uv run invoke serve-drift`, cổng 8001): đọc input mà API đã log trong PostgreSQL (`DATABASE_URL`), tính drift theo tháng replay hoặc khoảng thời gian và expose `/metrics` cho Prometheus. DAG Airflow `monitor_drift` gọi service này định kỳ và kích hoạt DAG `retrain` khi tỉ lệ cột bị drift vượt ngưỡng. Chi tiết endpoint và cấu hình: mục C14 trong [docs/source/contracts.md](docs/source/contracts.md).
+
+Unit test chạy được cả khi chưa có dữ liệu thật: các test cần file này sẽ tự bỏ qua.
+
+Trên macOS, XGBoost và LightGBM cần OpenMP: chạy `brew install libomp` trước `uv sync`.
+
+**Trạng thái mã nguồn:** đã có `data.py` (làm sạch, chia theo thời gian, schema), `features.py`, `model.py` (`build_from_spec` dựng pipeline hoặc ensemble từ một spec dạng `configs/model/*.yaml`) và `evaluate.py` (metrics, chọn ngưỡng). `train.py` (Hydra + MLflow), `tune.py` (Optuna), `registry.py` (alias champion/challenger) và `tracking.py` đã có; `visualize.py` chưa được viết.
 
 Quy trình nhánh, Pull Request và quy ước commit: xem [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -120,7 +181,7 @@ Quy trình nhánh, Pull Request và quy ước commit: xem [CONTRIBUTING.md](CON
 
 ```mermaid
 flowchart LR
-    A[Kaggle CSV] -->|data.py| B[(DVC remote<br/>DagsHub / MinIO)]
+    A[Kaggle CSV] -->|data.py| B[(DVC remote<br/>DagsHub / SeaweedFS)]
     B --> C[Tiền xử lý + validate schema<br/>pandera]
     C --> D[train.py<br/>Hydra + Optuna]
     D -->|metrics, artifacts| E[MLflow<br/>Tracking + Model Registry]
@@ -151,6 +212,7 @@ flowchart LR
 ├── data/                     # quản lý bằng DVC: raw/, processed/, stream/ (8 batch 2017)
 ├── dockerfiles/              # Dockerfile cho từng service
 ├── docs/                     # tài liệu MkDocs
+├── infra/postgres/           # script tạo database cho PostgreSQL trong compose
 ├── models/                   # artifact mô hình local (joblib, ONNX)
 ├── monitoring/
 │   ├── grafana/              # dashboards/, provisioning/
@@ -172,3 +234,4 @@ flowchart LR
 | Lê Vũ Hoàng Tùng | 20251239E | TBD |
 | Nguyễn Đắc Quang | 20260121E | TBD |
 | Phạm Nhật Anh | 20250729E | TBD |
+| Bùi Trung Đức | 20251089E | Serving: FastAPI, Docker, nạp mô hình, ONNX, replay production, log I/O, `/metrics` |

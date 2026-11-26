@@ -1,0 +1,121 @@
+{
+  "model": "Soft-voting ensemble",
+  "spec": "configs\\model\\champion.yaml",
+  "monthly": [
+    {
+      "month": "2017-01",
+      "rows": 3673,
+      "cancel_rate": 0.34004900626191126,
+      "roc_auc": 0.8793306922765936,
+      "ci_low": 0.8673449519009113,
+      "ci_high": 0.8896673611057616,
+      "average_precision": 0.8275696652394631
+    },
+    {
+      "month": "2017-02",
+      "rows": 4168,
+      "cancel_rate": 0.32581573896353166,
+      "roc_auc": 0.8432869145016484,
+      "ci_low": 0.8293037232054649,
+      "ci_high": 0.855013438115979,
+      "average_precision": 0.7679032926266453
+    },
+    {
+      "month": "2017-03",
+      "rows": 4948,
+      "cancel_rate": 0.337712206952304,
+      "roc_auc": 0.8617176056321312,
+      "ci_low": 0.850924334675498,
+      "ci_high": 0.8723370668328813,
+      "average_precision": 0.8126261038048177
+    },
+    {
+      "month": "2017-04",
+      "rows": 5653,
+      "cancel_rate": 0.4348133734300372,
+      "roc_auc": 0.8704145131161254,
+      "ci_low": 0.861150176008717,
+      "ci_high": 0.8793813713194489,
+      "average_precision": 0.8597647438967903
+    },
+    {
+      "month": "2017-05",
+      "rows": 6305,
+      "cancel_rate": 0.4380650277557494,
+      "roc_auc": 0.85964450815603,
+      "ci_low": 0.8514789008172154,
+      "ci_high": 0.8681691018050336,
+      "average_precision": 0.8550383602561298
+    },
+    {
+      "month": "2017-06",
+      "rows": 5639,
+      "cancel_rate": 0.4323461606667849,
+      "roc_auc": 0.8222568880366805,
+      "ci_low": 0.8112848535870345,
+      "ci_high": 0.8327326054966573,
+      "average_precision": 0.8185508589973554
+    },
+    {
+      "month": "2017-07",
+      "rows": 5310,
+      "cancel_rate": 0.3736346516007533,
+      "roc_auc": 0.7909357239151941,
+      "ci_low": 0.7784175000325247,
+      "ci_high": 0.8027826491676587,
+      "average_precision": 0.7041603891539693
+    },
+    {
+      "month": "2017-08",
+      "rows": 4923,
+      "cancel_rate": 0.36847450741417836,
+      "roc_auc": 0.8013477073176959,
+      "ci_low": 0.7884455940776486,
+      "ci_high": 0.8134062588325954,
+      "average_precision": 0.7032988168168507
+    }
+  ],
+  "skipped_months": [],
+  "hotel_transfer": [
+    {
+      "source_hotel": "City Hotel",
+      "target_hotel": "City Hotel",
+      "rows": 12255,
+      "cancel_rate": 0.4252141982864137,
+      "roc_auc": 0.8581599270577213,
+      "average_precision": 0.8515763181908146,
+      "in_domain": true,
+      "transfer_gap": 0.0
+    },
+    {
+      "source_hotel": "City Hotel",
+      "target_hotel": "Resort Hotel",
+      "rows": 6187,
+      "cancel_rate": 0.24648456440924518,
+      "roc_auc": 0.7332830488568194,
+      "average_precision": 0.5276983148049645,
+      "in_domain": false,
+      "transfer_gap": 0.12487687820090188
+    },
+    {
+      "source_hotel": "Resort Hotel",
+      "target_hotel": "City Hotel",
+      "rows": 12255,
+      "cancel_rate": 0.4252141982864137,
+      "roc_auc": 0.8227466583106042,
+      "average_precision": 0.8199945607861078,
+      "in_domain": false,
+      "transfer_gap": 0.03130894295811171
+    },
+    {
+      "source_hotel": "Resort Hotel",
+      "target_hotel": "Resort Hotel",
+      "rows": 6187,
+      "cancel_rate": 0.24648456440924518,
+      "roc_auc": 0.8540556012687159,
+      "average_precision": 0.7171030171439143,
+      "in_domain": true,
+      "transfer_gap": 0.0
+    }
+  ]
+}

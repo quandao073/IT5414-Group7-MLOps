@@ -1,0 +1,7 @@
+seed: 42
+output_dir: models
+model_version: ""
+experiment: hotel-booking-cancellation
+tracking: true
+register: false
+log_dir: null
