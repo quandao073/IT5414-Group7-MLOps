@@ -10,6 +10,8 @@ on:
       - src/hotel_booking/config.py
       - src/hotel_booking/data.py
       - src/hotel_booking/validation.py
+      - pyproject.toml
+      - uv.lock
       - .github/workflows/data_changed.yaml
   pull_request:
     branches: [main, develop]
@@ -41,18 +43,19 @@ jobs:
 
       - name: Check the DagsHub secrets
         env:
-          DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
-          DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
+          # The DagsHub username and token, shared with the MLflow client (contract C5).
+          DAGSHUB_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
+          DAGSHUB_TOKEN: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
         run: |
           if [ -z "$DAGSHUB_USERNAME" ] || [ -z "$DAGSHUB_TOKEN" ]; then
-            echo "::error::Set DAGSHUB_USERNAME and DAGSHUB_TOKEN in Settings -> Secrets and variables -> Actions."
+            echo "::error::Set MLFLOW_TRACKING_USERNAME and MLFLOW_TRACKING_PASSWORD (DagsHub username and token) in Settings -> Secrets and variables -> Actions."
             exit 1
           fi
           uv run dvc remote modify origin --local user "$DAGSHUB_USERNAME"
           uv run dvc remote modify origin --local password "$DAGSHUB_TOKEN"
 
       - name: Pull the raw dataset
-        run: uv run dvc pull --allow-missing data/raw/hotel_bookings.csv.dvc
+        run: uv run dvc pull data/raw/hotel_bookings.csv.dvc
 
       - name: Rebuild the processed splits
         run: uv run invoke preprocess-data
