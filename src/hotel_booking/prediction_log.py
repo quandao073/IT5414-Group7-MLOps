@@ -82,7 +82,9 @@ def connect(database_url: str) -> Engine:
     Returns:
         The engine.
     """
-    engine = create_engine(database_url, pool_pre_ping=True)
+    # Fail fast when PostgreSQL is unreachable, so the API still starts and serves without the log.
+    connect_args = {"connect_timeout": 3} if database_url.startswith("postgresql") else {}
+    engine = create_engine(database_url, pool_pre_ping=True, connect_args=connect_args)
     metadata.create_all(engine, checkfirst=True)
     return engine
 
