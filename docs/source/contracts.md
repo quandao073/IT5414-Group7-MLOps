@@ -19,7 +19,7 @@
 | C3 | [`rooms_in_booking` khi suy luận](#c3-rooms_in_booking) | Đề xuất, chờ Training xác nhận | Training, Frontend |
 | C4 | [Dữ liệu replay và nhãn trễ](#c4-du-lieu-replay) | Đề xuất, đã có code | Data, Drift |
 | C5 | [Biến môi trường](#c5-bien-moi-truong) | Đề xuất | Platform |
-| C6 | MLflow Registry | Sẽ bổ sung | Training |
+| C6 | [MLflow Registry](#c6-mlflow-registry) | Đề xuất, đã có code (chưa nối vào API) | Training |
 | C7 | [Endpoint `/reload`](#c7-endpoint-reload) | Đề xuất, đã có code | Training (DAG retrain) |
 | C8 | [Backend ONNX](#c8-backend-onnx) | Đề xuất, đã có code | Load test, Platform |
 | C9 | [Bảng log dự đoán và nhãn](#c9-bang-log-du-doan-va-nhan) | Đề xuất, đã có code, chạy thử trên PostgreSQL 16 | Drift, Training, Platform |
@@ -111,7 +111,7 @@ uv run invoke sample-model --spec configs/model/champion.yaml  # ensemble champi
 
 `src/hotel_booking/sample_model.py` chọn ngưỡng tốt nhất theo F1 trên 3 tháng cuối của train (không dùng test), rồi
 fit lại trên toàn bộ train. Khi Training lưu mô hình thật, chỉ cần giữ hai file trên đúng định dạng. Cách đăng ký lên
-MLflow Registry sẽ được bổ sung ở C6.
+MLflow Registry xem C6; `train.py` ghi cùng định dạng này và `model_card.json` còn được log vào run MLflow.
 
 ## C3. `rooms_in_booking`
 
@@ -156,6 +156,7 @@ Danh sách đầy đủ trong `.env.example` ở gốc repo. Bí mật (mật kh
 | `API_URL` | `http://localhost:8000` | Replay, Frontend, load test |
 | `MLFLOW_TRACKING_URI` | `https://dagshub.com/quandao073/IT5414-Group7-MLOps.mlflow`; MLflow tự host: `http://localhost:5000` (trong compose: `http://mlflow:5000`) | Training, API (Registry) |
 | `MLFLOW_TRACKING_USERNAME` | Tên tài khoản DagsHub của mỗi người | Training, API (Registry) |
+| `CONFIG_DIR` | Thư mục `configs/` của Hydra; mặc định `configs/` cạnh `src/` (trong container: `/app/configs`) | Training (`train.py`, `tune.py`) |
 | `MLFLOW_TRACKING_PASSWORD` | Access token DagsHub (bí mật, chỉ đặt trong `.env`) | Training, API (Registry) |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD` | `mlops`, `mlops` (chỉ dùng local) | docker compose: PostgreSQL, MLflow, Airflow |
 | `S3_ACCESS_KEY`, `S3_SECRET_KEY` | `mlops`, `mlops-secret` (chỉ dùng local) | docker compose: SeaweedFS, MLflow; DVC remote `local` |
@@ -392,3 +393,32 @@ phút), gọi `GET /drift/latest`; nếu `drift_share` đạt Airflow Variable `
 tháng đó chưa kích hoạt lần nào (Variable `monitor_drift_last_window`) thì trigger DAG có id **`retrain`** với
 `conf = {"reason": "drift", "window": "YYYY-MM", "drift_share": "..."}`. Training đặt đúng id `retrain` cho DAG
 huấn luyện lại; cho tới khi có DAG đó, bước `trigger_retrain` sẽ báo lỗi.
+
+## C6. MLflow Registry
+
+Code: `src/hotel_booking/train.py` (log và đăng ký), `src/hotel_booking/registry.py` (alias, tải model).
+
+| Mục | Giá trị |
+|---|---|
+| Tên model đăng ký | `hotel-booking-cancellation` |
+| Alias | `challenger`: bản vừa đăng ký; `champion`: bản đang phục vụ. Không dùng stage cũ |
+| URI nạp | `models:/hotel-booking-cancellation@champion` (`registry.load_model_by_alias`) |
+| Flavor | `mlflow.sklearn`, định dạng `cloudpickle`; nhận các cột `config.MODEL_INPUT_COLUMNS` |
+| Artifact của run | `model/` (model), `model_card.json`, `config/config.yaml`, `plots/` |
+| Metric của run | `roc_auc`, `pr_auc`, `f1`, `average_precision`, `decision_threshold`, ... trên split `test` |
+
+Quy trình:
+
+```bash
+uv run invoke train --overrides "model=lgbm train.register=true"   # đăng ký bản mới là challenger
+uv run invoke retrain                                              # train + đăng ký + promote theo configs/promotion/
+uv run invoke registry --command "promote --metric roc_auc"        # promote tay nếu tốt hơn champion
+uv run invoke registry --command "show"
+```
+
+Metric và ngưỡng cải thiện tối thiểu để lên champion nằm trong `configs/promotion/default.yaml`
+(`promotion.metric`, `promotion.min_delta`); `retrain.retrain(cfg)` là điểm vào cho DAG `retrain`.
+
+`decision_threshold` và `input_schema` nằm trong `model_card.json` của run nguồn
+(`MlflowClient().download_artifacts(version.run_id, "model_card.json")`). API chưa đọc từ Registry; khi nối vào API
+(`MODEL_ALIAS`) cần PR riêng của Serving.

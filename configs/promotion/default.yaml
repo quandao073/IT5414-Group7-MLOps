@@ -1,0 +1,2 @@
+metric: roc_auc
+min_delta: 0.0

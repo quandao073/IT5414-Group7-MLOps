@@ -28,6 +28,17 @@
     `uv run pre-commit run --all-files`. For more information, refer to the `.pre-commit-config.yaml` file.
 * The project has a Streamlit frontend. Run it with `uv run invoke serve-frontend` (needs the API from
   `uv run invoke serve-api` and `API_URL` set, default `http://localhost:8000`).
+* Training commands (Hydra configs in `configs/`, MLflow tracking via `MLFLOW_TRACKING_URI`, local `mlruns/` if unset):
+    * `uv run invoke train [--overrides "model=logreg train.seed=7 train.register=true train.tracking=false"]`
+      trains `configs/model/<model>.yaml`, logs params, metrics, confusion matrix and feature importance to MLflow
+      and saves `models/model.joblib` with `models/model_card.json`.
+    * `uv run invoke evaluate [--split test]` prints ROC-AUC, PR-AUC and F1 of `models/model.joblib`.
+    * `uv run invoke tune [--overrides "hpo.n_trials=10"]` tunes LightGBM with Optuna (nested MLflow runs) and writes
+      `configs/model/lgbm_tuned.yaml`.
+    * `uv run invoke retrain [--overrides "promotion.min_delta=0.002"]` trains, registers the model as `challenger` and
+      promotes it to `champion` when its `promotion.metric` beats the champion by `promotion.min_delta`.
+    * `uv run invoke registry --command "show|promote --metric roc_auc|set-alias champion 2"` manages the
+      `champion`/`challenger` aliases (contract C6).
 * Serving (FastAPI) commands:
     * `uv run invoke sample-model [--spec configs/model/<name>.yaml]` trains a model on `data/processed` and saves
       `models/model.joblib` with `models/model_card.json`.

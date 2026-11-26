@@ -1,9 +1,13 @@
-"""Binary classification metrics and decision threshold selection."""
+"""Binary classification metrics, decision threshold selection and a CLI to evaluate a saved model."""
 
+import json
+from pathlib import Path
 from typing import Any
 
+import joblib
 import numpy as np
 import pandas as pd
+import typer
 from sklearn.metrics import (
     accuracy_score,
     average_precision_score,
@@ -16,6 +20,11 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score,
 )
+
+from hotel_booking.config import MODEL_INPUT_COLUMNS, TARGET
+from hotel_booking.data import read_split
+
+HEADLINE_METRICS = ("roc_auc", "pr_auc", "f1")
 
 
 def binary_metrics(
@@ -91,3 +100,63 @@ def metrics_by_group(y_true: pd.Series, proba: np.ndarray, groups: pd.Series, th
             }
         )
     return pd.DataFrame(rows)
+
+
+def evaluate_model(
+    model_path: Path = Path("models/model.joblib"),
+    processed_dir: Path = Path("data/processed"),
+    split: str = "test",
+    threshold: float | None = None,
+    card_path: Path = Path("models/model_card.json"),
+    output: Path | None = None,
+) -> dict[str, float]:
+    """Evaluate a saved model on a processed split.
+
+    Args:
+        model_path: Path to `model.joblib`.
+        processed_dir: Folder with the splits written by `invoke preprocess-data`.
+        split: One of `train`, `test`, `production_holdout`.
+        threshold: Decision threshold; defaults to `decision_threshold` in the model card, then 0.5.
+        card_path: Path to `model_card.json`.
+        output: Optional JSON file to write the metrics to.
+
+    Returns:
+        Metric name to value, with `pr_auc` added as an alias of `average_precision`.
+    """
+    frame = read_split(processed_dir, split)
+    if threshold is None:
+        card = json.loads(card_path.read_text(encoding="utf-8")) if card_path.exists() else {}
+        threshold = float(card.get("decision_threshold", 0.5))
+    proba = joblib.load(model_path).predict_proba(frame[MODEL_INPUT_COLUMNS])[:, 1]
+    metrics = binary_metrics(frame[TARGET], proba, threshold)
+    metrics["pr_auc"] = metrics["average_precision"]
+    if output is not None:
+        output.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+    return metrics
+
+
+def main(
+    model_path: Path = Path("models/model.joblib"),
+    processed_dir: Path = Path("data/processed"),
+    split: str = "test",
+    threshold: float | None = None,
+    card_path: Path = Path("models/model_card.json"),
+    output: Path | None = None,
+) -> None:
+    """Print ROC-AUC, PR-AUC and F1 of a saved model on a split.
+
+    Args:
+        model_path: Path to `model.joblib`.
+        processed_dir: Folder with the processed splits.
+        split: Split to evaluate on.
+        threshold: Decision threshold; defaults to the model card's.
+        card_path: Path to `model_card.json`.
+        output: Optional JSON file for all metrics.
+    """
+    metrics = evaluate_model(model_path, processed_dir, split, threshold, card_path, output)
+    for name in HEADLINE_METRICS:
+        print(f"{name}: {metrics[name]:.4f}")
+
+
+if __name__ == "__main__":
+    typer.run(main)
