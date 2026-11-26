@@ -39,8 +39,12 @@ services:
       context: .
       dockerfile: dockerfiles/api.dockerfile
     ports: ["8000:8000"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mlops}:${POSTGRES_PASSWORD:-mlops}@postgres:5432/hotel
     volumes:
       - ./models:/app/models:ro
+    depends_on:
+      postgres: {condition: service_healthy}
     restart: unless-stopped
 
   # Streamlit frontend (1.4.3); it calls the API over the compose network.
@@ -64,7 +68,8 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      # Over TCP: on the first start the init scripts run while only the unix socket is open.
+      test: ["CMD-SHELL", "pg_isready -h localhost -U $${POSTGRES_USER} -d hotel"]
       interval: 5s
       timeout: 5s
       retries: 20

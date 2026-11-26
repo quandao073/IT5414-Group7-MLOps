@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from hotel_booking import config, data, sample_model
 from hotel_booking.api import create_app
-from hotel_booking.schemas import Booking
+from hotel_booking.schemas import LOG_ONLY_FIELDS, Booking
 
 SPEC = {"name": "Logistic Regression", "half_life_days": 365, "pipeline": {"log_skewed": True}, "params": {"C": 0.1}}
 VERSION = "test-logreg-1"
@@ -33,15 +33,20 @@ def client(model_dir: Path) -> Iterator[TestClient]:
 
 
 def test_booking_schema_matches_model_inputs() -> None:
-    """The request schema has exactly the columns the model pipeline reads."""
-    assert list(Booking.model_fields) == config.MODEL_INPUT_COLUMNS
+    """The request schema has exactly the columns the model pipeline reads, plus the log-only fields."""
+    assert [name for name in Booking.model_fields if name not in LOG_ONLY_FIELDS] == config.MODEL_INPUT_COLUMNS
 
 
 def test_health_reports_loaded_model(client: TestClient) -> None:
     """Health shows the loaded model version."""
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "model_loaded": True, "model_version": VERSION}
+    assert response.json() == {
+        "status": "ok",
+        "model_loaded": True,
+        "model_version": VERSION,
+        "prediction_logging": False,
+    }
 
 
 def test_predict_returns_probability_and_decision(client: TestClient, booking: dict[str, Any]) -> None:
