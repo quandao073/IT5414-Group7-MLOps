@@ -61,6 +61,12 @@ def registry(ctx: Context, command: str = "show") -> None:
 
 
 @task
+def durability_report(ctx: Context) -> None:
+    """Score the champion per 2017 month and across hotels, writing figures into reports/figures."""
+    ctx.run(f"uv run src/{PROJECT_NAME}/durability.py", echo=True, pty=not WINDOWS)
+
+
+@task
 def sample_model(ctx: Context, spec: str = "configs/model/logistic_regression.yaml") -> None:
     """Train a model from a spec and save it with its card to models/ for the API."""
     ctx.run(f"uv run src/{PROJECT_NAME}/sample_model.py --spec-path {spec}", echo=True, pty=not WINDOWS)
