@@ -3,7 +3,8 @@ from pathlib import Path
 import mlflow
 import pytest
 
-from hotel_booking import registry, retrain, train
+from hotel_booking import retrain, train
+from tests.test_registry import alias_version
 from tests.test_train import make_config
 
 
@@ -28,7 +29,7 @@ def test_first_retrain_becomes_champion_even_when_tracking_is_off(tmp_path: Path
     cfg = make_config(tmp_path, processed_dir, "train.tracking=false", "train.register=false")
     result = retrain.retrain(cfg)
     assert result["promoted"] is True and result["comparison"]["reason"] == "no champion yet"
-    assert registry.get_version_by_alias("champion").version == 1
+    assert alias_version("champion") == 1
     assert {"roc_auc", "pr_auc", "f1"} <= result["metrics"].keys()
 
 
@@ -37,8 +38,19 @@ def test_min_delta_from_config_decides_the_promotion(tmp_path: Path, processed_d
     retrain.retrain(make_config(tmp_path, processed_dir))
     strict = retrain.retrain(make_config(tmp_path, processed_dir, "promotion.min_delta=0.5"))
     assert strict["promoted"] is False
-    assert registry.get_version_by_alias("champion").version == 1
-    assert registry.get_version_by_alias("challenger").version == 2
+    assert alias_version("champion") == 1
+    assert alias_version("challenger") == 2
     lenient = retrain.retrain(make_config(tmp_path, processed_dir, "promotion.min_delta=-1.0"))
     assert lenient["promoted"] is True
-    assert registry.get_version_by_alias("champion").version == 3
+    assert alias_version("champion") == 3
+
+
+def test_only_a_promoted_model_replaces_the_served_artifacts(tmp_path: Path, processed_dir: Path) -> None:
+    """The API serves `train.output_dir`, so a challenger that loses must leave it untouched."""
+    served = tmp_path / "models" / "model_card.json"
+    retrain.retrain(make_config(tmp_path, processed_dir))
+    champion_card = served.read_text(encoding="utf-8")
+    assert retrain.retrain(make_config(tmp_path, processed_dir, "promotion.min_delta=0.5"))["promoted"] is False
+    assert served.read_text(encoding="utf-8") == champion_card
+    assert retrain.retrain(make_config(tmp_path, processed_dir, "promotion.min_delta=-1.0"))["promoted"] is True
+    assert served.read_text(encoding="utf-8") != champion_card

@@ -4,7 +4,9 @@ Run `uv run invoke retrain` or `uv run src/hotel_booking/retrain.py promotion.mi
 DAG (contract C14) calls the same entry point.
 """
 
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -33,10 +35,18 @@ def retrain(cfg: DictConfig, train: pd.DataFrame | None = None, test: pd.DataFra
     Returns:
         The test `metrics`, whether the challenger was `promoted`, and the compared values in `comparison`.
     """
-    forced = OmegaConf.merge(cfg, {"train": {"tracking": True, "register": True}})
-    assert isinstance(forced, DictConfig)
-    metrics = run_training(forced, train, test)
-    promoted, comparison = evaluate_and_promote(metric=cfg.promotion.metric, min_delta=cfg.promotion.min_delta)
+    # Train into a staging folder: `train.output_dir` is what the API serves, so it only changes on promotion.
+    staging = Path(tempfile.mkdtemp(prefix="retrain-"))
+    try:
+        overrides = {"train": {"tracking": True, "register": True, "output_dir": str(staging)}}
+        forced = OmegaConf.merge(cfg, overrides)
+        assert isinstance(forced, DictConfig)
+        metrics = run_training(forced, train, test)
+        promoted, comparison = evaluate_and_promote(metric=cfg.promotion.metric, min_delta=cfg.promotion.min_delta)
+        if promoted:
+            shutil.copytree(staging, Path(cfg.train.output_dir), dirs_exist_ok=True)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
     logger.info(f"Retrain finished, promoted={promoted}")
     return {"metrics": metrics, "promoted": promoted, "comparison": comparison}
 
