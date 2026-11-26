@@ -1,14 +1,19 @@
 """Request and response schemas of the prediction API (contract C1 in `docs/contracts.md`).
 
-`Booking` holds the raw columns known at booking time, exactly `config.MODEL_INPUT_COLUMNS`. Pydantic rejects
+`Booking` holds the raw columns known at booking time, exactly `config.MODEL_INPUT_COLUMNS`, plus the optional
+`booking_id` that only goes to the prediction log (contract C9). Pydantic rejects
 malformed requests with 422; values that are well-formed but unseen in train (a new category, a value outside
 the train range) are still predicted and reported as warnings, since such shifts are what drift monitoring
 must see.
 """
 
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict, Field
 
 MAX_BATCH_SIZE = 10_000
+LOG_ONLY_FIELDS = {"booking_id"}
+REPLAY_MONTH_PATTERN = r"^\d{4}-(0[1-9]|1[0-2])$"
 
 
 class Booking(BaseModel):
@@ -46,6 +51,11 @@ class Booking(BaseModel):
         ge=1,
         description="Rooms in the same booking. When omitted, it is counted from identical rows in the request.",
         examples=[1],
+    )
+    booking_id: int | None = Field(
+        default=None,
+        description="Optional id of the booking, only written to the prediction log to join the label later.",
+        examples=[None],
     )
 
 
@@ -87,9 +97,19 @@ class BatchResponse(BaseModel):
     warnings: list[InputWarning] = []
 
 
+class ReloadResponse(BaseModel):
+    """Response of `POST /reload`."""
+
+    previous_version: str | None = Field(description="Version served before the reload; null when none was loaded.")
+    current_version: str
+    changed: bool = Field(description="Whether the served version changed.")
+    reloaded_at: datetime
+
+
 class HealthResponse(BaseModel):
     """Response of `GET /health`."""
 
     status: str = Field(examples=["ok"])
     model_loaded: bool
     model_version: str | None = None
+    prediction_logging: bool = Field(default=False, description="Whether predictions are written to the database.")

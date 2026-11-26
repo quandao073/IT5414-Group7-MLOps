@@ -67,6 +67,18 @@ def sample_model(ctx: Context, spec: str = "configs/model/logistic_regression.ya
 
 
 @task
+def export_onnx(ctx: Context) -> None:
+    """Export models/model.joblib to ONNX, check it against joblib and record it in the model card."""
+    ctx.run(f"uv run src/{PROJECT_NAME}/onnx_export.py", echo=True, pty=not WINDOWS)
+
+
+@task
+def benchmark(ctx: Context) -> None:
+    """Compare joblib and ONNX latency, throughput and artifact size on the test split."""
+    ctx.run(f"uv run src/{PROJECT_NAME}/benchmark.py", echo=True, pty=not WINDOWS)
+
+
+@task
 def serve_api(ctx: Context, port: int = 8000, reload: bool = False) -> None:
     """Serve the prediction API locally; Swagger UI at /docs."""
     flags = " --reload" if reload else ""
