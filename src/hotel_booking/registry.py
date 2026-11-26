@@ -18,6 +18,8 @@ MODEL_NAME = "hotel-booking-cancellation"
 CHAMPION = "champion"
 CHALLENGER = "challenger"
 MODEL_ARTIFACT = "model"
+# MLflow error codes meaning "no such alias" and "no such registered model".
+MISSING_ALIAS_CODES = {"INVALID_PARAMETER_VALUE", "RESOURCE_DOES_NOT_EXIST"}
 
 app = typer.Typer(help="Manage the registered cancellation model.", no_args_is_help=True)
 
@@ -60,11 +62,16 @@ def get_version_by_alias(alias: str, name: str = MODEL_NAME) -> ModelVersion | N
 
     Returns:
         The version, or `None` when the alias is not set.
+
+    Raises:
+        MlflowException: For any other error (auth, network), so that a failed lookup is never read as "no champion".
     """
     try:
         return MlflowClient().get_model_version_by_alias(name, alias)
-    except MlflowException:
-        return None
+    except MlflowException as error:
+        if error.error_code in MISSING_ALIAS_CODES:
+            return None
+        raise
 
 
 def promote_challenger(name: str = MODEL_NAME) -> ModelVersion:

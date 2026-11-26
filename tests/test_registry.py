@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 from mlflow import MlflowClient
 from mlflow.exceptions import MlflowException
+from mlflow.protos.databricks_pb2 import PERMISSION_DENIED
 from sklearn.linear_model import LogisticRegression
 
 from hotel_booking import registry
@@ -19,6 +20,13 @@ def sqlite_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     mlflow.set_tracking_uri(uri)
     mlflow.set_registry_uri(uri)
     mlflow.set_experiment("registry-test")
+
+
+def alias_version(alias: str) -> int:
+    """The version number behind an alias; fails the test when no model has the alias."""
+    version = registry.get_version_by_alias(alias)
+    assert version is not None, f"no model version has the alias {alias}"
+    return int(version.version)
 
 
 def log_version(roc_auc: float) -> str:
@@ -48,10 +56,10 @@ def test_evaluate_and_promote_only_when_better() -> None:
     registry.register_model(log_version(0.70))
     promoted, info = registry.evaluate_and_promote()
     assert promoted is False and info["champion_version"] == 1
-    assert registry.get_version_by_alias("champion").version == 1
+    assert alias_version("champion") == 1
     registry.register_model(log_version(0.90))
     assert registry.evaluate_and_promote(min_delta=0.05)[0] is True
-    assert registry.get_version_by_alias("champion").version == 3
+    assert alias_version("champion") == 3
 
 
 def test_promote_without_challenger_fails_and_unknown_alias_does_not_load() -> None:
@@ -61,3 +69,15 @@ def test_promote_without_challenger_fails_and_unknown_alias_does_not_load() -> N
     registry.register_model(log_version(0.8))
     with pytest.raises(MlflowException):
         registry.load_model_by_alias("nope")
+
+
+def test_a_failed_alias_lookup_is_not_read_as_no_champion(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only a missing alias means "no champion"; an auth or network error must stop the promotion."""
+    registry.register_model(log_version(0.80))
+
+    def denied(*_: object) -> None:
+        raise MlflowException("denied", error_code=PERMISSION_DENIED)
+
+    monkeypatch.setattr(MlflowClient, "get_model_version_by_alias", denied)
+    with pytest.raises(MlflowException, match="denied"):
+        registry.evaluate_and_promote()
