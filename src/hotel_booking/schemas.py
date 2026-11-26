@@ -6,6 +6,8 @@ the train range) are still predicted and reported as warnings, since such shifts
 must see.
 """
 
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict, Field
 
 MAX_BATCH_SIZE = 10_000
@@ -85,6 +87,15 @@ class BatchResponse(BaseModel):
     threshold: float
     model_version: str
     warnings: list[InputWarning] = []
+
+
+class ReloadResponse(BaseModel):
+    """Response of `POST /reload`."""
+
+    previous_version: str | None = Field(description="Version served before the reload; null when none was loaded.")
+    current_version: str
+    changed: bool = Field(description="Whether the served version changed.")
+    reloaded_at: datetime
 
 
 class HealthResponse(BaseModel):

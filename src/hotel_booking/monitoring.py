@@ -74,6 +74,9 @@ class ApiMetrics:
             ["model_version", "backend"],
             registry=self.registry,
         )
+        self.reloads = Counter(
+            "api_model_reloads", "Calls to POST /reload by result.", ["result"], registry=self.registry
+        )
 
     def set_model(self, version: str | None, backend: str = "joblib") -> None:
         """Mark which model is served; clears the previous one.

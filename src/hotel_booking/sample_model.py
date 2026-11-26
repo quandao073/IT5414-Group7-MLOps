@@ -1,7 +1,7 @@
 """Train a model from a spec and save it with a model card that the API can serve.
 
-The card follows the format of `reports/it3190_model_card.json`, plus a `model_version` field. Until the
-training pipeline registers models in MLflow, this gives the API a real artifact to load.
+The card follows the format of `reports/it3190_model_card.json`, plus `model_version` and `artifact_sha256`.
+Until the training pipeline registers models in MLflow, this gives the API a real artifact to load.
 """
 
 import json
@@ -19,10 +19,9 @@ import yaml
 from hotel_booking.config import MODEL_INPUT_COLUMNS, TARGET, TIME_COLUMN
 from hotel_booking.data import build_input_schema, read_split
 from hotel_booking.evaluate import best_f1_threshold, binary_metrics
+from hotel_booking.loader import CARD_FILE, MODEL_FILE, file_sha256
 from hotel_booking.model import ModelSpec, build_from_spec
 
-MODEL_FILE = "model.joblib"
-CARD_FILE = "model_card.json"
 VALIDATION_MONTHS = 3
 LIBRARIES = ("scikit-learn", "pandas", "numpy", "lightgbm", "xgboost")
 
@@ -102,7 +101,11 @@ def train_with_card(
 
 
 def save_artifacts(model: Any, card: dict[str, Any], output_dir: Path) -> None:
-    """Write the model and its card.
+    """Write the model and its card, replacing any previous pair so a running API can `/reload` it.
+
+    Each file is written under a temporary name and then renamed. The card records the model checksum
+    (`artifact_sha256`), so an API reloading between the two renames refuses the mismatched pair and keeps
+    serving the previous model.
 
     Args:
         model: The fitted model.
@@ -110,8 +113,13 @@ def save_artifacts(model: Any, card: dict[str, Any], output_dir: Path) -> None:
         output_dir: Folder for `model.joblib` and `model_card.json`.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
-    joblib.dump(model, output_dir / MODEL_FILE)
-    (output_dir / CARD_FILE).write_text(json.dumps(card, indent=2, default=str), encoding="utf-8")
+    model_tmp = output_dir / f"{MODEL_FILE}.tmp"
+    card_tmp = output_dir / f"{CARD_FILE}.tmp"
+    joblib.dump(model, model_tmp)
+    card = {**card, "artifact_sha256": file_sha256(model_tmp)}
+    card_tmp.write_text(json.dumps(card, indent=2, default=str), encoding="utf-8")
+    model_tmp.replace(output_dir / MODEL_FILE)
+    card_tmp.replace(output_dir / CARD_FILE)
 
 
 def main(
