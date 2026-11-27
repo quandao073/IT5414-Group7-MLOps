@@ -1,0 +1,48 @@
+{
+  "model_version": "logistic_regression-real",
+  "model_name": "Logistic Regression",
+  "measured_at": "2026-11-27T04:03:03+00:00",
+  "rows": {
+    "single": 1,
+    "batch": 1000,
+    "parity": 5000
+  },
+  "parity_max_abs_difference": 1.4158631359006968e-07,
+  "backends": {
+    "joblib": {
+      "single": {
+        "p50_ms": 28.802,
+        "p95_ms": 42.334,
+        "mean_ms": 31.081,
+        "rows_per_second": 34.7
+      },
+      "batch": {
+        "p50_ms": 41.762,
+        "p95_ms": 76.936,
+        "mean_ms": 46.78,
+        "rows_per_second": 23945.1
+      },
+      "artifact_mb": 0.027
+    },
+    "onnx": {
+      "single": {
+        "p50_ms": 19.056,
+        "p95_ms": 26.029,
+        "mean_ms": 20.054,
+        "rows_per_second": 52.5
+      },
+      "batch": {
+        "p50_ms": 30.114,
+        "p95_ms": 33.664,
+        "mean_ms": 30.443,
+        "rows_per_second": 33207.4
+      },
+      "artifact_mb": 0.015
+    }
+  },
+  "environment": {
+    "python": "3.12.13",
+    "machine": "AMD64",
+    "system": "Windows"
+  }
+}

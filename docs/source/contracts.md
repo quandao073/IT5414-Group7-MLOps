@@ -215,7 +215,7 @@ có category hiếm (`min_frequency`, `handle_unknown="infrequent_if_exist"`), c
 
 **So sánh:** `uv run invoke benchmark` đo trên `test.csv` thời gian gọi mô hình (tạo đặc trưng + suy luận, không gồm
 HTTP) với 1 bản ghi và lô 1000 bản ghi (p50, p95, bản ghi/giây) và kích thước artifact, ghi `models/benchmark.json`
-và in bảng Markdown để đưa vào báo cáo. Load test qua HTTP dùng hai cấu hình:
+và in bảng Markdown để đưa vào báo cáo. Kết quả đo trên dữ liệu thật: `reports/serving_benchmark.md`. Load test qua HTTP dùng hai cấu hình:
 
 ```bash
 MODEL_BACKEND=joblib uv run invoke serve-api
