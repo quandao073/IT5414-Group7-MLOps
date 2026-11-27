@@ -211,7 +211,7 @@ flowchart LR
 │   └── train/
 ├── data/                     # quản lý bằng DVC: raw/, processed/, stream/ (8 batch 2017)
 ├── dockerfiles/              # Dockerfile cho từng service
-├── docs/                     # tài liệu MkDocs
+├── docs/                     # nguồn tài liệu MkDocs (docs/source/)
 ├── infra/postgres/           # script tạo database cho PostgreSQL trong compose
 ├── models/                   # artifact mô hình local (joblib, ONNX)
 ├── monitoring/
@@ -222,6 +222,7 @@ flowchart LR
 ├── src/hotel_booking/        # mã nguồn: dữ liệu, huấn luyện, API, drift
 ├── tests/                    # unit test; performance/ chứa Locust
 ├── docker-compose.yml        # toàn bộ service chạy local
+├── mkdocs.yml                # cấu hình tài liệu
 ├── pyproject.toml, uv.lock   # dependency (uv)
 └── tasks.py                  # lệnh invoke
 ```
@@ -235,3 +236,14 @@ flowchart LR
 | Nguyễn Đắc Quang | 20260121E | TBD |
 | Phạm Nhật Anh | 20250729E | TBD |
 | Bùi Trung Đức | 20251089E | Serving: FastAPI, Docker, nạp mô hình, ONNX, replay production, log I/O, `/metrics` |
+
+## 9. Tài liệu
+
+Trang tài liệu công khai: **https://quandao073.github.io/IT5414-Group7-MLOps/**
+
+- Nguồn: `docs/source/`; cấu hình `mkdocs.yml` ở gốc repo.
+- Xem local: `uv run invoke serve-docs` → http://127.0.0.1:8000.
+- Build kiểm tra: `uv run invoke build-docs` (chạy `mkdocs build --strict`, cảnh báo link gãy là lỗi).
+- Workflow `.github/workflows/docs.yaml` build và deploy lên GitHub Pages mỗi khi `main` thay đổi.
+- Bật Pages một lần: **Settings → Pages → Source: GitHub Actions**.
+

@@ -68,8 +68,12 @@
 # Documentation
 
 * If the project has a `docs/` folder, update documentation there as needed.
-* In this case the project will be using `mkdocs` for documentation. To build the docs locally, use
-    `uv run mkdocs serve`
+* In this case the project will be using `mkdocs` for documentation. To build and preview the docs locally, use
+    `uv run invoke serve-docs` (http://127.0.0.1:8000). To check the strict build CI runs, use
+    `uv run invoke build-docs` (`mkdocs build --strict`); a broken link or missing page fails it.
+    The site source is `docs/source/`, the config is `mkdocs.yml` at the repo root, and
+    `.github/workflows/docs.yaml` deploys it to GitHub Pages on `main`. The public URL is
+    https://quandao073.github.io/IT5414-Group7-MLOps/
 * Use existing docstring style.
 * Ensure all functions and classes have docstrings.
 * Use Google style for docstrings.
