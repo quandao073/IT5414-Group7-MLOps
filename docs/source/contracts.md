@@ -19,7 +19,7 @@
 | C3 | [`rooms_in_booking` khi suy luận](#c3-rooms_in_booking) | Đề xuất, chờ Training xác nhận | Training, Frontend |
 | C4 | [Dữ liệu replay và nhãn trễ](#c4-du-lieu-replay) | Đề xuất, đã có code | Data, Drift |
 | C5 | [Biến môi trường](#c5-bien-moi-truong) | Đề xuất | Platform |
-| C6 | [MLflow Registry](#c6-mlflow-registry) | Đề xuất, đã có code (chưa nối vào API) | Training |
+| C6 | [MLflow Registry](#c6-mlflow-registry) | Đề xuất, đã có code; API nạp được bằng `MODEL_SOURCE=mlflow` | Training, Serving |
 | C7 | [Endpoint `/reload`](#c7-endpoint-reload) | Đề xuất, đã có code | Training (DAG retrain) |
 | C8 | [Backend ONNX](#c8-backend-onnx) | Đề xuất, đã có code | Load test, Platform |
 | C9 | [Bảng log dự đoán và nhãn](#c9-bang-log-du-doan-va-nhan) | Đề xuất, đã có code, chạy thử trên PostgreSQL 16 | Drift, Training, Platform |
@@ -148,7 +148,9 @@ Danh sách đầy đủ trong `.env.example` ở gốc repo. Bí mật (mật kh
 
 | Biến | Mặc định | Dùng bởi |
 |---|---|---|
-| `MODEL_SOURCE` | `file` (hiện chỉ có giá trị này; `mlflow` sẽ thêm ở C6) | API |
+| `MODEL_SOURCE` | `file` (thư mục `MODEL_PATH` / `MODEL_CARD_PATH`) hoặc `mlflow` (alias trên Model Registry, C6) | API |
+| `MLFLOW_MODEL_NAME` | `hotel-booking-cancellation` | API (`MODEL_SOURCE=mlflow`) |
+| `MODEL_ALIAS` | `champion` | API (`MODEL_SOURCE=mlflow`) |
 | `MODEL_BACKEND` | `joblib`; `onnx` để chạy bằng ONNX Runtime (C8) | API |
 | `MODEL_PATH` | `models/model.joblib` (trong container: `/app/models/model.joblib`) | API |
 | `MODEL_CARD_PATH` | `models/model_card.json` (trong container: `/app/models/model_card.json`) | API |
@@ -420,5 +422,11 @@ Metric và ngưỡng cải thiện tối thiểu để lên champion nằm trong
 (`promotion.metric`, `promotion.min_delta`); `retrain.retrain(cfg)` là điểm vào cho DAG `retrain`.
 
 `decision_threshold` và `input_schema` nằm trong `model_card.json` của run nguồn
-(`MlflowClient().download_artifacts(version.run_id, "model_card.json")`). API chưa đọc từ Registry; khi nối vào API
-(`MODEL_ALIAS`) cần PR riêng của Serving.
+(`MlflowClient().download_artifacts(version.run_id, "model_card.json")`).
+
+**Phía API** (`MODEL_SOURCE=mlflow`, `loader.MlflowSource`): mỗi lần khởi động hoặc `POST /reload` (C7), API tra
+version đang giữ alias `MODEL_ALIAS` (mặc định `champion`) của `MLFLOW_MODEL_NAME`, nạp model bằng `mlflow.sklearn` và
+lấy `decision_threshold`, `input_schema` từ `model_card.json` của run đó. `model_version` trả về có dạng
+`hotel-booking-cancellation/<số version>`. Alias chưa có hoặc MLflow không trả lời thì API khởi động không có mô hình,
+hoặc `/reload` trả `503` và giữ mô hình cũ. Version trong Registry không chứa đồ thị ONNX, nên `MODEL_BACKEND=onnx`
+chỉ dùng với `MODEL_SOURCE=file`. Sau khi promote, DAG `retrain` gọi `POST /reload` để API chuyển sang champion mới.
