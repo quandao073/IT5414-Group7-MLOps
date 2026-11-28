@@ -1,10 +1,47 @@
 import os
+import re
+import time
+from pathlib import Path
 
+import httpx
 from invoke import Context, task
 
 WINDOWS = os.name == "nt"
 PROJECT_NAME = "hotel_booking"
 PYTHON_VERSION = "3.12"
+
+
+def parse_backend(metrics_text: str) -> str | None:
+    """Return the backend label of the api_model_info metric, if present."""
+    match = re.search(r'api_model_info\{[^}]*backend="([^"]+)"', metrics_text)
+    return match.group(1) if match else None
+
+
+def wait_for_api(host: str, timeout: float = 60.0, interval: float = 1.0) -> dict[str, object]:
+    """Poll GET /health until the API reports status ok and a loaded model."""
+    deadline = time.monotonic() + timeout
+    last_error = "no response"
+    while time.monotonic() < deadline:
+        try:
+            response = httpx.get(f"{host}/health", timeout=5.0)
+            payload = response.json()
+            if response.status_code == 200 and payload.get("status") == "ok" and payload.get("model_loaded") is True:
+                return payload
+            last_error = f"HTTP {response.status_code}: {payload}"
+        except (httpx.HTTPError, ValueError) as error:
+            last_error = str(error)
+        time.sleep(interval)
+    raise RuntimeError(f"API at {host} is not ready after {timeout:.0f}s: {last_error}")
+
+
+def verify_backend(host: str, backend: str) -> str:
+    """Fail unless GET /metrics reports that the API loaded the requested backend."""
+    response = httpx.get(f"{host}/metrics", timeout=5.0)
+    response.raise_for_status()
+    served = parse_backend(response.text)
+    if served != backend:
+        raise RuntimeError(f"API at {host} serves {served or 'an unknown backend'}, expected {backend}")
+    return served
 
 
 # Project commands
@@ -92,8 +129,13 @@ def load_test(
     run_time: str = "60s",
     host: str = "http://localhost:8000",
     csv_prefix: str = "reports/load_test/run",
+    backend: str | None = None,
 ) -> None:
     """Load test the prediction API with Locust; results go to --csv-prefix."""
+    Path(csv_prefix).parent.mkdir(parents=True, exist_ok=True)
+    wait_for_api(host)
+    if backend is not None:
+        print(f"API backend verified: {verify_backend(host, backend)}")
     ctx.run(
         f"uv run locust -f tests/performance/locustfile.py --headless -u {users} -r {spawn_rate} "
         f"-t {run_time} --host {host} --csv {csv_prefix}",

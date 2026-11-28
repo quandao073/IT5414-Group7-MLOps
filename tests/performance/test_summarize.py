@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from summarize import read_stats, to_markdown
+from tests.performance.summarize import read_stats, to_markdown
 
 
 def test_read_stats_uses_the_aggregated_row(tmp_path: Path) -> None:

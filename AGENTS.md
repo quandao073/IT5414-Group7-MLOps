@@ -46,8 +46,8 @@
       model to `models/`, `POST /reload` makes the running API serve it without a restart.
     * `uv run invoke export-onnx` exports `models/model.joblib` to ONNX; `MODEL_BACKEND=onnx` serves it with ONNX
       Runtime. `uv run invoke benchmark` compares both backends.
-    * `uv run invoke load-test [--users 20] [--spawn-rate 5] [--run-time 60s] [--csv-prefix reports/load_test/run]`
-      load-tests the running API with Locust; the comparison is in `reports/load_test.md`.
+    * `uv run invoke load-test [--users 20] [--spawn-rate 5] [--run-time 60s] [--backend joblib|onnx] [--csv-prefix reports/load_test/run]`
+      load-tests the running API with Locust (waits for `/health`, verifies `/metrics` backend); the comparison is in `reports/load_test.md`.
     * `uv run invoke replay [--months 2017-01,2017-02] [--delay 0.5]` replays the 2017 bookings into the API.
       With `DATABASE_URL` set, the API logs every prediction and the replay writes labels to PostgreSQL.
 * Contracts between modules (API schema, model artifact, replay data, environment variables, Docker) are in

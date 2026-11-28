@@ -36,13 +36,23 @@ Cửa sổ 1 — API với joblib:
 $env:MODEL_BACKEND="joblib"; uv run invoke serve-api
 ```
 
-Cửa sổ 2 — đo:
+Cửa sổ 2 — đo (lệnh tự chờ `/health` sẵn sàng và kiểm tra `/metrics` đang phục vụ đúng backend):
 
 ```bash
-uv run invoke load-test --csv-prefix reports/load_test/joblib
+uv run invoke load-test --backend joblib --csv-prefix reports/load_test/joblib
 ```
 
-Dừng API, lặp lại với `MODEL_BACKEND="onnx"` và `--csv-prefix reports/load_test/onnx`. Sau đó tổng hợp:
+Dừng API, lặp lại với backend ONNX:
+
+```powershell
+$env:MODEL_BACKEND="onnx"; uv run invoke serve-api
+```
+
+```bash
+uv run invoke load-test --backend onnx --csv-prefix reports/load_test/onnx
+```
+
+Sau đó tổng hợp:
 
 ```bash
 uv run python tests/performance/summarize.py reports/load_test/joblib_stats.csv reports/load_test/onnx_stats.csv
@@ -56,6 +66,17 @@ uv run python tests/performance/summarize.py reports/load_test/joblib_stats.csv 
 | onnx | 936 | 15.78 | 1200.0 | 1400.0 | 0.00% |
 
 Cả hai lượt đều có 0 request lỗi; `joblib_exceptions.csv` và `onnx_exceptions.csv` chỉ có dòng tiêu đề, tức không có lỗi kết nối bị ẩn.
+
+### Kiểm chứng backend
+
+`invoke load-test --backend ...` tự chờ `/health` sẵn sàng, đọc `/metrics` trước khi chạy và dừng nếu backend không khớp. Kiểm chứng lại bằng cách khởi động API lần lượt với từng backend, `/metrics` trả về:
+
+```text
+api_model_info{backend="joblib",model_version="logistic_regression-20261113144119"} 1.0
+api_model_info{backend="onnx",model_version="logistic_regression-20261113144119"} 1.0
+```
+
+`/health` của cả hai lượt trả `model_loaded: true`, cùng `model_version`.
 
 ## Nhận xét
 

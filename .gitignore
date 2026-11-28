@@ -15,6 +15,7 @@ reports/profile/*.prof
 reports/load_test/*.html
 reports/load_test/*_history.csv
 reports/load_test/*_exceptions.csv
+reports/load_test/run*
 
 # MLflow and Hydra run outputs
 mlruns/
