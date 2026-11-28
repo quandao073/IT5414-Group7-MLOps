@@ -1,0 +1,22 @@
+# Prometheus for the docker compose stack (contract C10 for the API metrics, C14 for the drift metrics).
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - alerts.yml
+
+scrape_configs:
+  - job_name: api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api:8000"]
+
+  - job_name: drift
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["drift:8001"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

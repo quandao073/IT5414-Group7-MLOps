@@ -1,0 +1,48 @@
+{
+  "model_version": "champion-real",
+  "model_name": "Random Forest + XGBoost + LightGBM",
+  "measured_at": "2026-11-27T04:05:07+00:00",
+  "rows": {
+    "single": 1,
+    "batch": 1000,
+    "parity": 5000
+  },
+  "parity_max_abs_difference": 2.839514552377409e-07,
+  "backends": {
+    "joblib": {
+      "single": {
+        "p50_ms": 169.741,
+        "p95_ms": 312.671,
+        "mean_ms": 191.357,
+        "rows_per_second": 5.9
+      },
+      "batch": {
+        "p50_ms": 231.818,
+        "p95_ms": 350.271,
+        "mean_ms": 261.559,
+        "rows_per_second": 4313.7
+      },
+      "artifact_mb": 70.422
+    },
+    "onnx": {
+      "single": {
+        "p50_ms": 110.911,
+        "p95_ms": 168.487,
+        "mean_ms": 117.058,
+        "rows_per_second": 9.0
+      },
+      "batch": {
+        "p50_ms": 142.722,
+        "p95_ms": 199.84,
+        "mean_ms": 150.822,
+        "rows_per_second": 7006.6
+      },
+      "artifact_mb": 34.748
+    }
+  },
+  "environment": {
+    "python": "3.12.13",
+    "machine": "AMD64",
+    "system": "Windows"
+  }
+}
