@@ -24,6 +24,8 @@ x-airflow: &airflow
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
     # Local demo: no login, every visitor of http://localhost:8080 is admin.
     AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
+    # Read by the monitor_drift DAG; set a short cron in .env for a demo.
+    MONITOR_DRIFT_SCHEDULE: ${MONITOR_DRIFT_SCHEDULE:-*/10 * * * *}
   volumes:
     - ./airflow/dags:/opt/airflow/dags
     - airflow-logs:/opt/airflow/logs
@@ -41,6 +43,9 @@ services:
     ports: ["8000:8000"]
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mlops}:${POSTGRES_PASSWORD:-mlops}@postgres:5432/hotel
+      # MODEL_SOURCE=mlflow serves the champion of the compose MLflow registry instead of ./models (contract C6).
+      MODEL_SOURCE: ${MODEL_SOURCE:-file}
+      MLFLOW_TRACKING_URI: http://mlflow:5000
     volumes:
       - ./models:/app/models:ro
     depends_on:
@@ -57,6 +62,53 @@ services:
       API_URL: http://api:8000
     depends_on:
       api: {condition: service_healthy}
+    restart: unless-stopped
+
+  # Drift detection service (1.6.6, contract C14): logged inputs vs train.csv. Needs data/processed
+  # (`uv run dvc pull` or `uv run invoke preprocess-data`) before the first start.
+  drift:
+    build:
+      context: .
+      dockerfile: dockerfiles/drift.dockerfile
+    ports: ["8001:8001"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mlops}:${POSTGRES_PASSWORD:-mlops}@postgres:5432/hotel
+    volumes:
+      - ./data/processed:/app/data/processed:ro
+    depends_on:
+      postgres: {condition: service_healthy}
+    restart: unless-stopped
+
+  # Prometheus (1.6.7): scrapes the API and the drift service, evaluates monitoring/prometheus/alerts.yml.
+  prometheus:
+    image: prom/prometheus:v3.16.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+    ports: ["9090:9090"]
+    volumes:
+      - ./monitoring/prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    restart: unless-stopped
+
+  # Grafana (1.6.7): Prometheus datasource and the dashboard are provisioned from monitoring/grafana.
+  # Local demo: anonymous viewers; log in as admin to edit.
+  grafana:
+    image: grafana/grafana:13.3.2
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/hotel-booking.json
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    ports: ["3000:3000"]
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on: [prometheus]
     restart: unless-stopped
 
   # PostgreSQL: MLflow, Airflow and prediction-log databases (infra/postgres/init.sql).
@@ -186,3 +238,5 @@ volumes:
   postgres-data:
   seaweedfs-data:
   airflow-logs:
+  prometheus-data:
+  grafana-data:

@@ -19,7 +19,7 @@
 | C3 | [`rooms_in_booking` khi suy luận](#c3-rooms_in_booking) | Đề xuất, chờ Training xác nhận | Training, Frontend |
 | C4 | [Dữ liệu replay và nhãn trễ](#c4-du-lieu-replay) | Đề xuất, đã có code | Data, Drift |
 | C5 | [Biến môi trường](#c5-bien-moi-truong) | Đề xuất | Platform |
-| C6 | [MLflow Registry](#c6-mlflow-registry) | Đề xuất, đã có code (chưa nối vào API) | Training |
+| C6 | [MLflow Registry](#c6-mlflow-registry) | Đề xuất, đã có code; API nạp được bằng `MODEL_SOURCE=mlflow` | Training, Serving |
 | C7 | [Endpoint `/reload`](#c7-endpoint-reload) | Đề xuất, đã có code | Training (DAG retrain) |
 | C8 | [Backend ONNX](#c8-backend-onnx) | Đề xuất, đã có code | Load test, Platform |
 | C9 | [Bảng log dự đoán và nhãn](#c9-bang-log-du-oan-va-nhan) | Đề xuất, đã có code, chạy thử trên PostgreSQL 16 | Drift, Training, Platform |
@@ -148,7 +148,9 @@ Danh sách đầy đủ trong `.env.example` ở gốc repo. Bí mật (mật kh
 
 | Biến | Mặc định | Dùng bởi |
 |---|---|---|
-| `MODEL_SOURCE` | `file` (hiện chỉ có giá trị này; `mlflow` sẽ thêm ở C6) | API |
+| `MODEL_SOURCE` | `file` (thư mục `MODEL_PATH` / `MODEL_CARD_PATH`) hoặc `mlflow` (alias trên Model Registry, C6) | API |
+| `MLFLOW_MODEL_NAME` | `hotel-booking-cancellation` | API (`MODEL_SOURCE=mlflow`) |
+| `MODEL_ALIAS` | `champion` | API (`MODEL_SOURCE=mlflow`) |
 | `MODEL_BACKEND` | `joblib`; `onnx` để chạy bằng ONNX Runtime (C8) | API |
 | `MODEL_PATH` | `models/model.joblib` (trong container: `/app/models/model.joblib`) | API |
 | `MODEL_CARD_PATH` | `models/model_card.json` (trong container: `/app/models/model_card.json`) | API |
@@ -161,6 +163,7 @@ Danh sách đầy đủ trong `.env.example` ở gốc repo. Bí mật (mật kh
 | `POSTGRES_USER`, `POSTGRES_PASSWORD` | `mlops`, `mlops` (chỉ dùng local) | docker compose: PostgreSQL, MLflow, Airflow |
 | `S3_ACCESS_KEY`, `S3_SECRET_KEY` | `mlops`, `mlops-secret` (chỉ dùng local) | docker compose: SeaweedFS, MLflow; DVC remote `local` |
 | `AIRFLOW_JWT_SECRET` | `local-only-jwt-secret` (chỉ dùng local) | docker compose: các service Airflow |
+| `GRAFANA_ADMIN_PASSWORD` | `admin` (chỉ dùng local) | docker compose: tài khoản `admin` của Grafana |
 | `DATABASE_URL` | Không có (không ghi/đọc log). Trong compose: `postgresql+psycopg://mlops:mlops@postgres:5432/hotel` | API (ghi log, C9), replay (ghi nhãn, C4), Drift service (đọc log, C14) |
 | `REFERENCE_DIR` | `data/processed` (trong container: `/app/data/processed`) | Drift service |
 | `DRIFT_MIN_ROWS` | `100` | Drift service |
@@ -215,7 +218,7 @@ có category hiếm (`min_frequency`, `handle_unknown="infrequent_if_exist"`), c
 
 **So sánh:** `uv run invoke benchmark` đo trên `test.csv` thời gian gọi mô hình (tạo đặc trưng + suy luận, không gồm
 HTTP) với 1 bản ghi và lô 1000 bản ghi (p50, p95, bản ghi/giây) và kích thước artifact, ghi `models/benchmark.json`
-và in bảng Markdown để đưa vào báo cáo. Load test qua HTTP dùng hai cấu hình:
+và in bảng Markdown để đưa vào báo cáo. Kết quả đo trên dữ liệu thật: `reports/serving_benchmark.md`. Load test qua HTTP dùng hai cấu hình:
 
 ```bash
 MODEL_BACKEND=joblib uv run invoke serve-api
@@ -316,11 +319,16 @@ Mẫu cho Platform: đoạn scrape `docs/examples/prometheus_scrape.yml`, PromQL
 | `airflow-apiserver` | 8080 | `http://airflow-apiserver:8080` | Airflow 3 UI + API (không đăng nhập, chỉ dùng local) |
 | `airflow-scheduler`, `airflow-dag-processor` | – | – | LocalExecutor, đọc DAG từ `./airflow/dags` |
 | `airflow-init` | – | – | Chạy một lần, `airflow db migrate` vào database `airflow` |
+| `drift` | 8001 | `http://drift:8001` | Drift service (C14), đọc `prediction_logs`, mount `./data/processed` làm dữ liệu tham chiếu |
+| `prometheus` | 9090 | `http://prometheus:9090` | Scrape `api:8000` và `drift:8001`, luật cảnh báo `monitoring/prometheus/alerts.yml` |
+| `grafana` | 3000 | – | Dashboard `monitoring/grafana/dashboards/hotel-booking.json`; xem không cần đăng nhập, sửa bằng tài khoản `admin` |
 
 - Dữ liệu nằm trong volume `postgres-data`, `seaweedfs-data`; `docker compose down -v` xóa sạch.
 - `infra/postgres/init.sql` chỉ chạy khi volume `postgres-data` được tạo lần đầu. Thêm database mới thì cần
   `docker compose down -v` hoặc tạo tay bằng `psql`.
-- Service mới (Prometheus, Grafana, drift) thêm vào cùng file và dùng lại `postgres`/`seaweedfs`.
+- Cảnh báo (`monitoring/prometheus/alerts.yml`): `ApiDown`, `NoModelLoaded`, `HighErrorRate` (> 5%), `HighLatencyP95`
+  (p95 `/predict*` > 0,5 s) và `DataDrift` (`drift_share` >= 0,5). Không có Alertmanager: cảnh báo hiện ở
+  http://localhost:9090/alerts và trong bảng "Cảnh báo đang bật" của dashboard, không gửi đi đâu.
 - DAG dùng image `apache/airflow:3.4.0` nguyên bản, không import `hotel_booking`: gọi service qua HTTP
   (ví dụ `/reload` của API) hoặc chạy image `train` bằng `DockerOperator`. CI (`Airflow DAGs`) import mọi DAG
   bằng `DagBag` trong đúng image này.
@@ -369,24 +377,8 @@ bị drift, 0–1), `dataset_drift` (`drift_share >= 0.5`) và `details` (mỗi 
   `drift_drifted_columns`, `drift_rows`, `drift_dataset_drift`, `drift_last_check_timestamp_seconds` và
   `drift_checks_total`. Grafana cảnh báo theo `drift_share`.
 
-**Trong docker compose** (Platform thêm khi gộp compose):
-
-```yaml
-  drift:
-    build:
-      context: .
-      dockerfile: dockerfiles/drift.dockerfile
-    ports: ["8001:8001"]
-    environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mlops}:${POSTGRES_PASSWORD:-mlops}@postgres:5432/hotel
-    volumes:
-      - ./data/processed:/app/data/processed:ro
-    depends_on:
-      postgres: {condition: service_healthy}
-    restart: unless-stopped
-```
-
-Prometheus scrape `drift:8001/metrics`.
+**Trong docker compose**: service `drift` (C11), cổng 8001, mount `./data/processed` làm dữ liệu tham chiếu nên cần
+`uv run dvc pull` hoặc `uv run invoke preprocess-data` trước lần chạy đầu. Prometheus scrape `drift:8001/metrics`.
 
 **DAG `monitor_drift`** (`airflow/dags/monitor_drift.py`): chạy theo lịch `MONITOR_DRIFT_SCHEDULE` (mặc định mỗi 10
 phút), gọi `GET /drift/latest`; nếu `drift_share` đạt Airflow Variable `drift_share_threshold` (mặc định 0.5) và
@@ -420,5 +412,11 @@ Metric và ngưỡng cải thiện tối thiểu để lên champion nằm trong
 (`promotion.metric`, `promotion.min_delta`); `retrain.retrain(cfg)` là điểm vào cho DAG `retrain`.
 
 `decision_threshold` và `input_schema` nằm trong `model_card.json` của run nguồn
-(`MlflowClient().download_artifacts(version.run_id, "model_card.json")`). API chưa đọc từ Registry; khi nối vào API
-(`MODEL_ALIAS`) cần PR riêng của Serving.
+(`MlflowClient().download_artifacts(version.run_id, "model_card.json")`).
+
+**Phía API** (`MODEL_SOURCE=mlflow`, `loader.MlflowSource`): mỗi lần khởi động hoặc `POST /reload` (C7), API tra
+version đang giữ alias `MODEL_ALIAS` (mặc định `champion`) của `MLFLOW_MODEL_NAME`, nạp model bằng `mlflow.sklearn` và
+lấy `decision_threshold`, `input_schema` từ `model_card.json` của run đó. `model_version` trả về có dạng
+`hotel-booking-cancellation/<số version>`. Alias chưa có hoặc MLflow không trả lời thì API khởi động không có mô hình,
+hoặc `/reload` trả `503` và giữ mô hình cũ. Version trong Registry không chứa đồ thị ONNX, nên `MODEL_BACKEND=onnx`
+chỉ dùng với `MODEL_SOURCE=file`. Sau khi promote, DAG `retrain` gọi `POST /reload` để API chuyển sang champion mới.
