@@ -36,7 +36,7 @@ def to_markdown(rows: dict[str, dict[str, float | int]]) -> str:
     ]
     for backend, stats in rows.items():
         lines.append(
-            f"| {backend} | {stats['requests']} | {stats['rps']} | {stats['p50_ms']} | {stats['p95_ms']} "
+            f"| {backend} | {stats['requests']} | {stats['rps']:.2f} | {stats['p50_ms']} | {stats['p95_ms']} "
             f"| {stats['error_rate']:.2%} |"
         )
     return "\n".join(lines)

@@ -46,4 +46,20 @@ def test_to_markdown_formats_each_backend() -> None:
         }
     )
     assert "| Backend | Requests | RPS | p50 (ms) | p95 (ms) | Error rate |" in table
-    assert "| joblib | 100 | 10.5 | 12.0 | 30.0 | 2.00% |" in table
+    assert "| joblib | 100 | 10.50 | 12.0 | 30.0 | 2.00% |" in table
+
+
+def test_to_markdown_rounds_rps_to_two_decimals() -> None:
+    table = to_markdown(
+        {
+            "onnx": {
+                "requests": 936,
+                "failures": 0,
+                "error_rate": 0.0,
+                "rps": 15.78278678310969,
+                "p50_ms": 1200.0,
+                "p95_ms": 1400.0,
+            }
+        }
+    )
+    assert "| onnx | 936 | 15.78 | 1200.0 | 1400.0 | 0.00% |" in table
