@@ -24,6 +24,8 @@ x-airflow: &airflow
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
     # Local demo: no login, every visitor of http://localhost:8080 is admin.
     AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
+    # Read by the monitor_drift DAG; set a short cron in .env for a demo.
+    MONITOR_DRIFT_SCHEDULE: ${MONITOR_DRIFT_SCHEDULE:-*/10 * * * *}
   volumes:
     - ./airflow/dags:/opt/airflow/dags
     - airflow-logs:/opt/airflow/logs
