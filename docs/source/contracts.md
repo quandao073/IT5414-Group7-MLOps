@@ -22,7 +22,7 @@
 | C6 | [MLflow Registry](#c6-mlflow-registry) | Đề xuất, đã có code; API nạp được bằng `MODEL_SOURCE=mlflow` | Training, Serving |
 | C7 | [Endpoint `/reload`](#c7-endpoint-reload) | Đề xuất, đã có code | Training (DAG retrain) |
 | C8 | [Backend ONNX](#c8-backend-onnx) | Đề xuất, đã có code | Load test, Platform |
-| C9 | [Bảng log dự đoán và nhãn](#c9-bang-log-du-doan-va-nhan) | Đề xuất, đã có code, chạy thử trên PostgreSQL 16 | Drift, Training, Platform |
+| C9 | [Bảng log dự đoán và nhãn](#c9-bang-log-du-oan-va-nhan) | Đề xuất, đã có code, chạy thử trên PostgreSQL 16 | Drift, Training, Platform |
 | C10 | [Metrics Prometheus](#c10-metrics-prometheus) | Đề xuất, đã có code | Platform |
 | C11 | [Service trong docker compose](#c11-docker-compose) | Đề xuất, đã có `docker-compose.yml` | Platform, cả nhóm |
 | C12 | [Docker image](#c12-docker) | Đề xuất, đã có Dockerfile | Platform, Training |

@@ -106,9 +106,8 @@ Toàn bộ hệ thống chạy local bằng Docker Desktop và `docker compose`,
 | `seaweedfs` | SeaweedFS | Artifact store MLflow, DVC remote (S3) |
 | `postgres` | PostgreSQL | Metadata Airflow/MLflow, log dự đoán |
 | `airflow-*` | Apache Airflow 3 | DAG `retrain`, `monitor_drift` |
-| `drift` | FastAPI + Evidently | Tính drift, xuất metrics drift |
-| `prometheus` | Prometheus | Thu thập metrics |
-| `grafana` | Grafana | Dashboard, cảnh báo |
+| `drift` | FastAPI + Evidently | Tính drift, xuất metrics drift; chạy `uv run invoke serve-drift` (cổng 8001), chưa nằm trong compose |
+| `prometheus`, `grafana` | Prometheus, Grafana | Dashboard, cảnh báo; cấu hình scrape trong `monitoring/`, chưa nằm trong compose |
 
 **Cài đặt môi trường phát triển** (yêu cầu [uv](https://docs.astral.sh/uv/getting-started/installation/) và Git):
 
@@ -198,7 +197,7 @@ Bản sửa được: [reports/figures/architecture.excalidraw](reports/figures/
 │   └── train/
 ├── data/                     # quản lý bằng DVC: raw/, processed/, stream/ (8 batch 2017)
 ├── dockerfiles/              # Dockerfile cho từng service
-├── docs/                     # tài liệu MkDocs
+├── docs/                     # nguồn tài liệu MkDocs (docs/source/)
 ├── infra/postgres/           # script tạo database cho PostgreSQL trong compose
 ├── models/                   # artifact mô hình local (joblib, ONNX)
 ├── monitoring/
@@ -209,6 +208,7 @@ Bản sửa được: [reports/figures/architecture.excalidraw](reports/figures/
 ├── src/hotel_booking/        # mã nguồn: dữ liệu, huấn luyện, API, drift
 ├── tests/                    # unit test; performance/ chứa Locust
 ├── docker-compose.yml        # toàn bộ service chạy local
+├── mkdocs.yml                # cấu hình tài liệu
 ├── pyproject.toml, uv.lock   # dependency (uv)
 └── tasks.py                  # lệnh invoke
 ```
@@ -222,3 +222,14 @@ Bản sửa được: [reports/figures/architecture.excalidraw](reports/figures/
 | Nguyễn Đắc Quang | 20260121E | Frontend & chất lượng: Streamlit, profiling, workflow khi dữ liệu thay đổi, độ bền mô hình, load test, MkDocs |
 | Phạm Nhật Anh | 20250729E | Data: DVC pipeline, pandera, drift Evidently, drift service, DAG `monitor_drift` |
 | Bùi Trung Đức | 20251089E | Serving: FastAPI, Docker, nạp mô hình, ONNX, replay production, log I/O, `/metrics` |
+
+## 9. Tài liệu
+
+Trang tài liệu công khai: **https://quandao073.github.io/IT5414-Group7-MLOps/**
+
+- Nguồn: `docs/source/`; cấu hình `mkdocs.yml` ở gốc repo.
+- Xem local: `uv run invoke serve-docs` → http://127.0.0.1:8000.
+- Build kiểm tra: `uv run invoke build-docs` (chạy `mkdocs build --strict`, cảnh báo link gãy là lỗi).
+- Workflow `.github/workflows/docs.yaml` build và deploy lên GitHub Pages mỗi khi `main` thay đổi.
+- Bật Pages một lần: **Settings → Pages → Source: GitHub Actions**.
+

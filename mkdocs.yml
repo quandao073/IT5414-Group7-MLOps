@@ -1,0 +1,64 @@
+site_name: Hotel Booking MLOps — Nhóm 07
+site_description: Dự báo khả năng hủy đặt phòng khách sạn — pipeline MLOps end-to-end (IT5414).
+site_author: IT5414 Group 7
+site_url: https://quandao073.github.io/IT5414-Group7-MLOps/
+repo_url: https://github.com/quandao073/IT5414-Group7-MLOps
+repo_name: quandao073/IT5414-Group7-MLOps
+edit_uri: edit/develop/docs/source/
+docs_dir: docs/source
+site_dir: docs/site
+theme:
+  name: material
+  language: vi
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - content.code.annotate
+    - search.suggest
+    - toc.follow
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Chuyển sang giao diện tối
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Chuyển sang giao diện sáng
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_root_heading: true
+            separate_signature: true
+            show_signature_annotations: true
+nav:
+  - Trang chủ: index.md
+  - Bắt đầu: getting-started.md
+  - Cấu hình: configuration.md
+  - API: api.md
+  - Vận hành: operations.md
+  - Hợp đồng: contracts.md
