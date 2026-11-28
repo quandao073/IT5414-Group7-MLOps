@@ -41,6 +41,9 @@ services:
     ports: ["8000:8000"]
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mlops}:${POSTGRES_PASSWORD:-mlops}@postgres:5432/hotel
+      # MODEL_SOURCE=mlflow serves the champion of the compose MLflow registry instead of ./models (contract C6).
+      MODEL_SOURCE: ${MODEL_SOURCE:-file}
+      MLFLOW_TRACKING_URI: http://mlflow:5000
     volumes:
       - ./models:/app/models:ro
     depends_on:
