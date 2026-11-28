@@ -138,8 +138,8 @@ docker compose ps
 docker compose down
 ```
 
-Các service: API (`:8000`), Streamlit (`:8501`), MLflow (`:5000`), Airflow (`:8080`),
-PostgreSQL (`:5432`), SeaweedFS S3 (`:8333`), Prometheus và Grafana. Chi tiết cổng và biến
+Các service: API (`:8000`), Streamlit (`:8501`), drift service (`:8001`), MLflow (`:5000`),
+Airflow (`:8080`), Prometheus (`:9090`), Grafana (`:3000`), PostgreSQL (`:5432`), SeaweedFS S3 (`:8333`). Chi tiết cổng và biến
 môi trường xem [Hợp đồng](contracts.md) mục C11.
 
 ## Lệnh invoke thường dùng

@@ -64,6 +64,8 @@ commit). Bảng dưới bổ sung các biến chỉ dùng trong compose hoặc A
 | `POSTGRES_USER`, `POSTGRES_PASSWORD` | `mlops`, `mlops` (local) | docker compose |
 | `S3_ACCESS_KEY`, `S3_SECRET_KEY` | `mlops`, `mlops-secret` (local) | SeaweedFS, MLflow, DVC remote `local` |
 | `AIRFLOW_JWT_SECRET` | `local-only-jwt-secret` (local) | docker compose |
+| `MONITOR_DRIFT_SCHEDULE` | `*/10 * * * *`; đặt ngắn hơn khi demo | DAG `monitor_drift` |
+| `GRAFANA_ADMIN_PASSWORD` | `admin` (local) | Grafana |
 | `DATABASE_URL` | không có — tắt log dự đoán | API, replay, drift service |
 | `REFERENCE_DIR` | `data/processed` | Drift service |
 | `DRIFT_MIN_ROWS` | `100` | Drift service |

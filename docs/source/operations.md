@@ -57,7 +57,9 @@ giữa hai giai đoạn. Nhận xét tổng hợp nằm ở
 ### Online
 
 Drift service (`src/hotel_booking/drift_service.py`, cổng `8001`) đọc `prediction_logs` và so
-với dữ liệu tham chiếu bằng Evidently. Service chạy độc lập, **chưa nằm trong `docker compose`**:
+với dữ liệu tham chiếu bằng Evidently. Trong docker compose đây là service `drift`, mount
+`./data/processed` làm dữ liệu tham chiếu (cần `uv run dvc pull` hoặc `uv run invoke preprocess-data`
+trước lần chạy đầu). Ngoài compose:
 
 ```bash
 uv run invoke serve-drift
@@ -85,7 +87,7 @@ Airflow 3 chạy trong docker compose, giao diện tại `http://localhost:8080`
 
 | DAG | Lịch | Việc làm |
 |---|---|---|
-| `stack_health` | định kỳ | Kiểm tra các service còn sống |
+| `stack_health` | chạy tay | Gọi `/health` của `api`, `mlflow` và `drift` |
 | `monitor_drift` | mặc định `*/10 * * * *` (`MONITOR_DRIFT_SCHEDULE`) | Gọi `/drift/latest`; nếu `drift_share` vượt `drift_share_threshold` (mặc định 0.5) và là tháng mới thì trigger DAG `retrain` |
 
 `monitor_drift` ghi tháng vừa trigger vào Variable `monitor_drift_last_window`, nên mỗi tháng
@@ -117,32 +119,40 @@ chết. Kiểm tra phiên bản đang chạy bằng `GET /health` hoặc metric 
 Các lệnh registry:
 
 ```bash
-uv run invoke registry --command "show"
-uv run invoke registry --command "promote --version 3"
-uv run invoke registry --command "demote --version 3"
+uv run invoke registry --command "show"                                   # version của champion và challenger
+uv run invoke registry --command "promote --metric roc_auc --min-delta 0.002"  # promote nếu challenger tốt hơn
+uv run invoke registry --command "set-alias champion 3"                   # quay lại version 3
 ```
 
 ## Giám sát
 
-API và drift service expose `/metrics`; Prometheus và Grafana **chưa được nối vào
-`docker compose`** — `monitoring/prometheus/` và `monitoring/grafana/` hiện chỉ có file giữ chỗ.
-Khi dựng, trỏ Prometheus vào `api:8000/metrics` và `drift:8001/metrics` (hoặc
-`localhost` khi chạy ngoài compose) rồi import dashboard từ `monitoring/grafana/dashboards/`.
+API và drift service expose `/metrics`. Trong docker compose, Prometheus scrape `api:8000` và
+`drift:8001` (`monitoring/prometheus/prometheus.yml`); Grafana được cấu hình sẵn datasource và
+dashboard "Hotel booking — API và drift" (`monitoring/grafana/`).
 
-| Thành phần | Địa chỉ khi tự dựng | Vai trò |
+| Thành phần | Địa chỉ | Vai trò |
 |---|---|---|
-| Prometheus | `http://localhost:9090` | Thu metric từ API và drift service |
-| Grafana | `http://localhost:3000` | Dashboard và cảnh báo |
+| Prometheus | `http://localhost:9090` | Thu metric, đánh giá cảnh báo (`/alerts`) |
+| Grafana | `http://localhost:3000` | Dashboard; xem không cần đăng nhập, sửa bằng `admin` |
 | MLflow | `http://localhost:5000` | Run, artifact, model registry |
 | Airflow | `http://localhost:8080` | Lịch và trạng thái DAG |
 
-Cảnh báo quan trọng nên đặt trên Grafana:
+Cảnh báo (`monitoring/prometheus/alerts.yml`) hiện ở `http://localhost:9090/alerts` và trong bảng
+"Cảnh báo đang bật" của dashboard; không có Alertmanager nên không gửi thông báo đi đâu.
 
-- `api_requests_total` với `status=5xx` tăng — API đang lỗi.
-- `api_request_latency_seconds` p95 vượt ngưỡng — suy giảm độ trễ.
-- `drift_share` vượt 0.5 — dữ liệu đầu vào lệch khỏi train.
-- `api_input_warnings_total` tăng theo `column` — xuất hiện category mới.
-- `api_model_reloads_total{result="failure"}` tăng — promote không tới được API.
+| Cảnh báo | Điều kiện |
+|---|---|
+| `ApiDown` | Prometheus không scrape được API trong 1 phút |
+| `NoModelLoaded` | API chạy nhưng không có mô hình (`api_model_info`) trong 1 phút |
+| `HighErrorRate` | Tỉ lệ request lỗi > 5% trong 5 phút |
+| `HighLatencyP95` | p95 của `/predict*` > 0,5 giây trong 5 phút |
+| `DataDrift` | `drift_share` của một tháng ≥ 0,5 |
+
+Khi demo: replay một tháng rồi gọi `curl http://localhost:8001/drift/latest` (hoặc bật DAG
+`monitor_drift`) để bật `DataDrift`; `docker compose stop api` hơn 1 phút để bật `ApiDown`.
+
+Dashboard cũng theo dõi được `api_input_warnings_total` (category mới theo cột) và
+`api_model_reloads_total{result="failure"}` (promote không tới được API).
 
 ## Docker compose
 
@@ -161,9 +171,9 @@ docker compose down
 | `postgres` | 5432 | Log dự đoán, metadata Airflow/MLflow |
 | `seaweedfs` | 8333 | S3-compatible cho artifact và DVC remote `local` |
 | `airflow-apiserver`, `airflow-scheduler`, `airflow-dag-processor` | 8080 | Airflow 3, LocalExecutor |
-
-`drift`, Prometheus và Grafana không có trong compose hiện tại; drift service chạy bằng
-`uv run invoke serve-drift` như mục [Drift](#drift).
+| `drift` | 8001 | Drift service, đọc `prediction_logs` |
+| `prometheus` | 9090 | Scrape `api` và `drift`, đánh giá cảnh báo |
+| `grafana` | 3000 | Dashboard |
 
 Biến môi trường và giá trị mặc định xem [Cấu hình](configuration.md#bien-moi-truong) và
 [Hợp đồng](contracts.md#c11-docker-compose).
