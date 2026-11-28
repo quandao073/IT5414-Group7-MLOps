@@ -1,0 +1,45 @@
+# Alert rules, shown as firing in Prometheus (http://localhost:9090/alerts) and in the Grafana dashboard.
+# Thresholds follow docs/examples/grafana_queries.md. There is no Alertmanager: alerts are not sent anywhere.
+groups:
+  - name: api
+    rules:
+      - alert: ApiDown
+        expr: up{job="api"} == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "Prediction API does not answer /metrics"
+
+      - alert: NoModelLoaded
+        expr: up{job="api"} == 1 unless on() (api_model_info == 1)
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "The API is up but serves no model"
+
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(api_errors_total[5m]))
+            / sum(rate(api_requests_total{endpoint!="/metrics"}[5m])) > 0.05
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "More than 5% of API requests fail ({{ $value | humanizePercentage }})"
+
+      - alert: HighLatencyP95
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(api_request_latency_seconds_bucket{endpoint=~"/predict.*"}[5m]))) > 0.5
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "p95 latency of /predict* is above 0.5 s ({{ $value | humanizeDuration }})"
+
+  - name: drift
+    rules:
+      # drift_share is set by the drift service each time a window is checked (DAG monitor_drift, or GET /drift).
+      - alert: DataDrift
+        expr: max by (window) (drift_share) >= 0.5
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.window }}: {{ $value | humanizePercentage }} of the compared columns drifted"

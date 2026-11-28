@@ -44,8 +44,10 @@
       `models/model.joblib` with `models/model_card.json`.
     * `uv run invoke serve-api [--reload]` serves the API on port 8000; Swagger UI at `/docs`. After writing a new
       model to `models/`, `POST /reload` makes the running API serve it without a restart.
+    * `MODEL_SOURCE=mlflow` makes the API serve the `champion` of the MLflow Model Registry (`MLFLOW_TRACKING_URI`,
+      contract C6); after `invoke retrain` promotes a model, `POST /reload` switches the API to it.
     * `uv run invoke export-onnx` exports `models/model.joblib` to ONNX; `MODEL_BACKEND=onnx` serves it with ONNX
-      Runtime. `uv run invoke benchmark` compares both backends.
+      Runtime. `uv run invoke benchmark` compares both backends; measured results are in `reports/serving_benchmark.md`.
     * `uv run invoke load-test [--users 20] [--spawn-rate 5] [--run-time 60s] [--backend joblib|onnx] [--csv-prefix reports/load_test/run]`
       load-tests the running API with Locust (waits for `/health`, verifies `/metrics` backend); the comparison is in `reports/load_test.md`.
     * `uv run invoke replay [--months 2017-01,2017-02] [--delay 0.5]` replays the 2017 bookings into the API.
@@ -70,8 +72,12 @@
 # Documentation
 
 * If the project has a `docs/` folder, update documentation there as needed.
-* In this case the project will be using `mkdocs` for documentation. To build the docs locally, use
-    `uv run mkdocs serve`
+* In this case the project will be using `mkdocs` for documentation. To build and preview the docs locally, use
+    `uv run invoke serve-docs` (http://127.0.0.1:8000). To check the strict build CI runs, use
+    `uv run invoke build-docs` (`mkdocs build --strict`); a broken link or missing page fails it.
+    The site source is `docs/source/`, the config is `mkdocs.yml` at the repo root, and
+    `.github/workflows/docs.yaml` deploys it to GitHub Pages on `main`. The public URL is
+    https://quandao073.github.io/IT5414-Group7-MLOps/
 * Use existing docstring style.
 * Ensure all functions and classes have docstrings.
 * Use Google style for docstrings.

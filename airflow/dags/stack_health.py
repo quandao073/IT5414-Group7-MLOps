@@ -13,6 +13,7 @@ from airflow.sdk import dag, task
 SERVICES = {
     "api": "http://api:8000/health",
     "mlflow": "http://mlflow:5000/health",
+    "drift": "http://drift:8001/health",
 }
 
 

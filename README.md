@@ -106,9 +106,8 @@ Toàn bộ hệ thống chạy local bằng Docker Desktop và `docker compose`,
 | `seaweedfs` | SeaweedFS | Artifact store MLflow, DVC remote (S3) |
 | `postgres` | PostgreSQL | Metadata Airflow/MLflow, log dự đoán |
 | `airflow-*` | Apache Airflow 3 | DAG `retrain`, `monitor_drift` |
-| `drift` | FastAPI + Evidently | Tính drift, xuất metrics drift |
-| `prometheus` | Prometheus | Thu thập metrics |
-| `grafana` | Grafana | Dashboard, cảnh báo |
+| `drift` | FastAPI + Evidently | Tính drift, xuất metrics drift; chạy `uv run invoke serve-drift` (cổng 8001), chưa nằm trong compose |
+| `prometheus`, `grafana` | Prometheus, Grafana | Dashboard, cảnh báo; cấu hình scrape trong `monitoring/`, chưa nằm trong compose |
 
 **Cài đặt môi trường phát triển** (yêu cầu [uv](https://docs.astral.sh/uv/getting-started/installation/) và Git):
 
@@ -151,12 +150,13 @@ Workflow `data_changed.yaml` chạy `dvc pull`, sinh lại `data/processed`, val
 **Chạy bằng docker compose** (Docker Desktop, không cần Internet sau lần build đầu). Danh sách service và cổng ở mục C11 của [contracts](docs/source/contracts.md):
 
 ```bash
-docker compose up -d --build   # API :8000, Streamlit :8501, MLflow :5000, Airflow :8080, PostgreSQL :5432, SeaweedFS S3 :8333
+docker compose up -d --build   # API :8000, Streamlit :8501, drift :8001, MLflow :5000, Airflow :8080, Prometheus :9090, Grafana :3000
 docker compose ps              # chờ các service báo healthy
 docker compose down            # dừng; thêm -v để xóa luôn dữ liệu PostgreSQL và SeaweedFS
 ```
 
 - API nạp `models/model.joblib` (tạo bằng `uv run invoke sample-model`), sau khi tạo model thì chạy `docker compose restart api`.
+- Giám sát: dashboard Grafana tại http://localhost:3000 (xem không cần đăng nhập; sửa bằng `admin`/`admin`), cảnh báo ở http://localhost:9090/alerts. Drift service cần `data/processed` (`uv run dvc pull` hoặc `uv run invoke preprocess-data`). Khi demo: `uv run invoke replay` rồi gọi `curl localhost:8001/drift/latest` (hoặc bật DAG `monitor_drift`) để bật cảnh báo `DataDrift`; dừng API (`docker compose stop api`) hơn 1 phút để bật `ApiDown`.
 - Airflow UI tại http://localhost:8080 (bản local không cần đăng nhập). DAG nằm trong `airflow/dags/`, ví dụ `stack_health` gọi `/health` của API và MLflow. Image Airflow không cài dependency của dự án: DAG chỉ điều phối, code dự án chạy trong service hoặc image riêng.
 - Dùng MLflow tự host thay cho DagsHub: đặt `MLFLOW_TRACKING_URI=http://localhost:5000` trong `.env`.
 - DVC remote `local` trên SeaweedFS (key mặc định trong `.env.example`):
@@ -179,25 +179,11 @@ Trên macOS, XGBoost và LightGBM cần OpenMP: chạy `brew install libomp` tr�
 
 Quy trình nhánh, Pull Request và quy ước commit: xem [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## 6. Kiến trúc dự kiến
+## 6. Kiến trúc
 
-```mermaid
-flowchart LR
-    A[Kaggle CSV] -->|data.py| B[(DVC remote<br/>DagsHub / SeaweedFS)]
-    B --> C[Tiền xử lý + validate schema<br/>pandera]
-    C --> D[train.py<br/>Hydra + Optuna]
-    D -->|metrics, artifacts| E[MLflow<br/>Tracking + Model Registry]
-    E -->|alias: champion| F[FastAPI + ONNX Runtime<br/>Docker]
-    F --> G[Streamlit frontend]
-    F -->|log input/output| P[(PostgreSQL)]
-    P --> H[Drift service<br/>Evidently]
-    F -->|/metrics| I[Prometheus]
-    H -->|drift metrics| I
-    I --> K[Grafana<br/>dashboard + alert]
-    L[Airflow 3<br/>retrain · monitor_drift] -->|kiểm tra drift| H
-    L -->|retrain theo lịch / khi drift| D
-    J[GitHub Actions<br/>lint · test · build] -.-> F
-```
+![Kiến trúc MLOps](reports/figures/architecture.png)
+
+Bản sửa được: [reports/figures/architecture.excalidraw](reports/figures/architecture.excalidraw) (mở bằng [excalidraw.com](https://excalidraw.com), *Open*). Cổng, URL nội bộ và biến môi trường của từng service: mục C11 trong [docs/source/contracts.md](docs/source/contracts.md).
 
 **Vòng huấn luyện lại:** DAG `retrain` được kích hoạt theo lịch (chu kỳ cấu hình được) hoặc bởi DAG `monitor_drift` khi tỉ lệ cột bị drift vượt ngưỡng. Mỗi lần chạy: lấy dữ liệu đã có nhãn → kiểm tra schema → huấn luyện → đăng ký mô hình với alias `challenger` → so sánh với `champion` trên tháng có nhãn gần nhất → promote nếu tốt hơn → API nạp lại `champion`.
 
@@ -213,7 +199,7 @@ flowchart LR
 │   └── train/
 ├── data/                     # quản lý bằng DVC: raw/, processed/, stream/ (8 batch 2017)
 ├── dockerfiles/              # Dockerfile cho từng service
-├── docs/                     # tài liệu MkDocs
+├── docs/                     # nguồn tài liệu MkDocs (docs/source/)
 ├── infra/postgres/           # script tạo database cho PostgreSQL trong compose
 ├── models/                   # artifact mô hình local (joblib, ONNX)
 ├── monitoring/
@@ -224,6 +210,7 @@ flowchart LR
 ├── src/hotel_booking/        # mã nguồn: dữ liệu, huấn luyện, API, drift
 ├── tests/                    # unit test; performance/ chứa Locust
 ├── docker-compose.yml        # toàn bộ service chạy local
+├── mkdocs.yml                # cấu hình tài liệu
 ├── pyproject.toml, uv.lock   # dependency (uv)
 └── tasks.py                  # lệnh invoke
 ```
@@ -232,8 +219,19 @@ flowchart LR
 
 | Thành viên | MSSV | Phụ trách chính |
 |---|---|---|
-| Đào Anh Quân (trưởng nhóm) | 20251237E | TBD |
-| Lê Vũ Hoàng Tùng | 20251239E | TBD |
-| Nguyễn Đắc Quang | 20260121E | TBD |
-| Phạm Nhật Anh | 20250729E | TBD |
+| Đào Anh Quân (trưởng nhóm) | 20251237E | Platform: repo, CI/CD, docker compose, MLflow/PostgreSQL/SeaweedFS tự host, Airflow, Prometheus/Grafana, tích hợp, điều phối báo cáo |
+| Lê Vũ Hoàng Tùng | 20251239E | Training: train/evaluate, Hydra, MLflow, Optuna, Model Registry, retrain và cổng champion–challenger, DAG `retrain` |
+| Nguyễn Đắc Quang | 20260121E | Frontend & chất lượng: Streamlit, profiling, workflow khi dữ liệu thay đổi, độ bền mô hình, load test, MkDocs |
+| Phạm Nhật Anh | 20250729E | Data: DVC pipeline, pandera, drift Evidently, drift service, DAG `monitor_drift` |
 | Bùi Trung Đức | 20251089E | Serving: FastAPI, Docker, nạp mô hình, ONNX, replay production, log I/O, `/metrics` |
+
+## 9. Tài liệu
+
+Trang tài liệu công khai: **https://quandao073.github.io/IT5414-Group7-MLOps/**
+
+- Nguồn: `docs/source/`; cấu hình `mkdocs.yml` ở gốc repo.
+- Xem local: `uv run invoke serve-docs` → http://127.0.0.1:8000.
+- Build kiểm tra: `uv run invoke build-docs` (chạy `mkdocs build --strict`, cảnh báo link gãy là lỗi).
+- Workflow `.github/workflows/docs.yaml` build và deploy lên GitHub Pages mỗi khi `main` thay đổi.
+- Bật Pages một lần: **Settings → Pages → Source: GitHub Actions**.
+
