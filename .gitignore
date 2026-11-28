@@ -11,6 +11,11 @@ models/*
 # profiling artifacts: raw pstats dumps are large, the JSON summaries are committed
 reports/profile/*.prof
 
+# Locust artifacts: keep the stats and failures CSVs, drop the rest
+reports/load_test/*.html
+reports/load_test/*_history.csv
+reports/load_test/*_exceptions.csv
+
 # MLflow and Hydra run outputs
 mlruns/
 mlartifacts/

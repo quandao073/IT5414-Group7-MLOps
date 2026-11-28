@@ -85,6 +85,24 @@ def benchmark(ctx: Context) -> None:
 
 
 @task
+def load_test(
+    ctx: Context,
+    users: int = 20,
+    spawn_rate: int = 5,
+    run_time: str = "60s",
+    host: str = "http://localhost:8000",
+    csv_prefix: str = "reports/load_test/run",
+) -> None:
+    """Load test the prediction API with Locust; results go to --csv-prefix."""
+    ctx.run(
+        f"uv run locust -f tests/performance/locustfile.py --headless -u {users} -r {spawn_rate} "
+        f"-t {run_time} --host {host} --csv {csv_prefix}",
+        echo=True,
+        pty=not WINDOWS,
+    )
+
+
+@task
 def serve_api(ctx: Context, port: int = 8000, reload: bool = False) -> None:
     """Serve the prediction API locally; Swagger UI at /docs."""
     flags = " --reload" if reload else ""

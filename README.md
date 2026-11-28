@@ -131,6 +131,8 @@ Giao diện Streamlit đọc `API_URL` (mặc định `http://localhost:8000`) v
 
 Kết quả profiling (số đo trước/sau, nút thắt, các tối ưu đã thử) nằm trong [reports/profiling.md](reports/profiling.md); hình so sánh nằm trong `reports/figures/`.
 
+**Load test API:** với API đang chạy, `uv run invoke load-test --csv-prefix reports/load_test/<backend>` đo 20 người dùng trong 60 giây. Chạy lần lượt với `MODEL_BACKEND=joblib` và `MODEL_BACKEND=onnx`; bảng so sánh và cách chạy lại nằm trong [reports/load_test.md](reports/load_test.md).
+
 **Kết nối DagsHub** (MLflow tracking và DVC remote dùng chung, repo [dagshub.com/quandao073/IT5414-Group7-MLOps](https://dagshub.com/quandao073/IT5414-Group7-MLOps)). Làm một lần trên mỗi máy, trước `dvc pull`:
 
 1. Tạo tài khoản DagsHub, nhờ trưởng nhóm thêm làm collaborator, rồi tạo access token tại [dagshub.com/user/settings/tokens](https://dagshub.com/user/settings/tokens).

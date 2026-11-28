@@ -222,6 +222,9 @@ MODEL_BACKEND=joblib uv run invoke serve-api
 MODEL_BACKEND=onnx uv run invoke serve-api
 ```
 
+Với API đang chạy, `uv run invoke load-test --csv-prefix reports/load_test/<backend>` đo 20 người dùng trong 60 giây
+cho từng backend; bảng p50/p95, RPS và tỉ lệ lỗi nằm trong `reports/load_test.md`.
+
 ## C9. Bảng log dự đoán và nhãn
 
 PostgreSQL. DDL: `docs/examples/sql/schema.sql`, truy vấn mẫu: `docs/examples/sql/queries.sql` (đã chạy thử trên
