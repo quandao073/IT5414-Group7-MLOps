@@ -149,12 +149,13 @@ Workflow `data_changed.yaml` chạy `dvc pull`, sinh lại `data/processed`, val
 **Chạy bằng docker compose** (Docker Desktop, không cần Internet sau lần build đầu). Danh sách service và cổng ở mục C11 của [contracts](docs/source/contracts.md):
 
 ```bash
-docker compose up -d --build   # API :8000, Streamlit :8501, MLflow :5000, Airflow :8080, PostgreSQL :5432, SeaweedFS S3 :8333
+docker compose up -d --build   # API :8000, Streamlit :8501, drift :8001, MLflow :5000, Airflow :8080, Prometheus :9090, Grafana :3000
 docker compose ps              # chờ các service báo healthy
 docker compose down            # dừng; thêm -v để xóa luôn dữ liệu PostgreSQL và SeaweedFS
 ```
 
 - API nạp `models/model.joblib` (tạo bằng `uv run invoke sample-model`), sau khi tạo model thì chạy `docker compose restart api`.
+- Giám sát: dashboard Grafana tại http://localhost:3000 (xem không cần đăng nhập; sửa bằng `admin`/`admin`), cảnh báo ở http://localhost:9090/alerts. Drift service cần `data/processed` (`uv run dvc pull` hoặc `uv run invoke preprocess-data`). Khi demo: `uv run invoke replay` rồi gọi `curl localhost:8001/drift/latest` (hoặc bật DAG `monitor_drift`) để bật cảnh báo `DataDrift`; dừng API (`docker compose stop api`) hơn 1 phút để bật `ApiDown`.
 - Airflow UI tại http://localhost:8080 (bản local không cần đăng nhập). DAG nằm trong `airflow/dags/`, ví dụ `stack_health` gọi `/health` của API và MLflow. Image Airflow không cài dependency của dự án: DAG chỉ điều phối, code dự án chạy trong service hoặc image riêng.
 - Dùng MLflow tự host thay cho DagsHub: đặt `MLFLOW_TRACKING_URI=http://localhost:5000` trong `.env`.
 - DVC remote `local` trên SeaweedFS (key mặc định trong `.env.example`):

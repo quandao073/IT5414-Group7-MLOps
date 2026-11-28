@@ -163,6 +163,7 @@ Danh sách đầy đủ trong `.env.example` ở gốc repo. Bí mật (mật kh
 | `POSTGRES_USER`, `POSTGRES_PASSWORD` | `mlops`, `mlops` (chỉ dùng local) | docker compose: PostgreSQL, MLflow, Airflow |
 | `S3_ACCESS_KEY`, `S3_SECRET_KEY` | `mlops`, `mlops-secret` (chỉ dùng local) | docker compose: SeaweedFS, MLflow; DVC remote `local` |
 | `AIRFLOW_JWT_SECRET` | `local-only-jwt-secret` (chỉ dùng local) | docker compose: các service Airflow |
+| `GRAFANA_ADMIN_PASSWORD` | `admin` (chỉ dùng local) | docker compose: tài khoản `admin` của Grafana |
 | `DATABASE_URL` | Không có (không ghi/đọc log). Trong compose: `postgresql+psycopg://mlops:mlops@postgres:5432/hotel` | API (ghi log, C9), replay (ghi nhãn, C4), Drift service (đọc log, C14) |
 | `REFERENCE_DIR` | `data/processed` (trong container: `/app/data/processed`) | Drift service |
 | `DRIFT_MIN_ROWS` | `100` | Drift service |
@@ -318,11 +319,16 @@ Mẫu cho Platform: đoạn scrape `docs/examples/prometheus_scrape.yml`, PromQL
 | `airflow-apiserver` | 8080 | `http://airflow-apiserver:8080` | Airflow 3 UI + API (không đăng nhập, chỉ dùng local) |
 | `airflow-scheduler`, `airflow-dag-processor` | – | – | LocalExecutor, đọc DAG từ `./airflow/dags` |
 | `airflow-init` | – | – | Chạy một lần, `airflow db migrate` vào database `airflow` |
+| `drift` | 8001 | `http://drift:8001` | Drift service (C14), đọc `prediction_logs`, mount `./data/processed` làm dữ liệu tham chiếu |
+| `prometheus` | 9090 | `http://prometheus:9090` | Scrape `api:8000` và `drift:8001`, luật cảnh báo `monitoring/prometheus/alerts.yml` |
+| `grafana` | 3000 | – | Dashboard `monitoring/grafana/dashboards/hotel-booking.json`; xem không cần đăng nhập, sửa bằng tài khoản `admin` |
 
 - Dữ liệu nằm trong volume `postgres-data`, `seaweedfs-data`; `docker compose down -v` xóa sạch.
 - `infra/postgres/init.sql` chỉ chạy khi volume `postgres-data` được tạo lần đầu. Thêm database mới thì cần
   `docker compose down -v` hoặc tạo tay bằng `psql`.
-- Service mới (Prometheus, Grafana, drift) thêm vào cùng file và dùng lại `postgres`/`seaweedfs`.
+- Cảnh báo (`monitoring/prometheus/alerts.yml`): `ApiDown`, `NoModelLoaded`, `HighErrorRate` (> 5%), `HighLatencyP95`
+  (p95 `/predict*` > 0,5 s) và `DataDrift` (`drift_share` >= 0,5). Không có Alertmanager: cảnh báo hiện ở
+  http://localhost:9090/alerts và trong bảng "Cảnh báo đang bật" của dashboard, không gửi đi đâu.
 - DAG dùng image `apache/airflow:3.4.0` nguyên bản, không import `hotel_booking`: gọi service qua HTTP
   (ví dụ `/reload` của API) hoặc chạy image `train` bằng `DockerOperator`. CI (`Airflow DAGs`) import mọi DAG
   bằng `DagBag` trong đúng image này.
@@ -371,24 +377,8 @@ bị drift, 0–1), `dataset_drift` (`drift_share >= 0.5`) và `details` (mỗi 
   `drift_drifted_columns`, `drift_rows`, `drift_dataset_drift`, `drift_last_check_timestamp_seconds` và
   `drift_checks_total`. Grafana cảnh báo theo `drift_share`.
 
-**Trong docker compose** (Platform thêm khi gộp compose):
-
-```yaml
-  drift:
-    build:
-      context: .
-      dockerfile: dockerfiles/drift.dockerfile
-    ports: ["8001:8001"]
-    environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mlops}:${POSTGRES_PASSWORD:-mlops}@postgres:5432/hotel
-    volumes:
-      - ./data/processed:/app/data/processed:ro
-    depends_on:
-      postgres: {condition: service_healthy}
-    restart: unless-stopped
-```
-
-Prometheus scrape `drift:8001/metrics`.
+**Trong docker compose**: service `drift` (C11), cổng 8001, mount `./data/processed` làm dữ liệu tham chiếu nên cần
+`uv run dvc pull` hoặc `uv run invoke preprocess-data` trước lần chạy đầu. Prometheus scrape `drift:8001/metrics`.
 
 **DAG `monitor_drift`** (`airflow/dags/monitor_drift.py`): chạy theo lịch `MONITOR_DRIFT_SCHEDULE` (mặc định mỗi 10
 phút), gọi `GET /drift/latest`; nếu `drift_share` đạt Airflow Variable `drift_share_threshold` (mặc định 0.5) và
