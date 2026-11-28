@@ -217,8 +217,8 @@ Bản sửa được: [reports/figures/architecture.excalidraw](reports/figures/
 
 | Thành viên | MSSV | Phụ trách chính |
 |---|---|---|
-| Đào Anh Quân (trưởng nhóm) | 20251237E | TBD |
-| Lê Vũ Hoàng Tùng | 20251239E | TBD |
-| Nguyễn Đắc Quang | 20260121E | TBD |
-| Phạm Nhật Anh | 20250729E | TBD |
+| Đào Anh Quân (trưởng nhóm) | 20251237E | Platform: repo, CI/CD, docker compose, MLflow/PostgreSQL/SeaweedFS tự host, Airflow, Prometheus/Grafana, tích hợp, điều phối báo cáo |
+| Lê Vũ Hoàng Tùng | 20251239E | Training: train/evaluate, Hydra, MLflow, Optuna, Model Registry, retrain và cổng champion–challenger, DAG `retrain` |
+| Nguyễn Đắc Quang | 20260121E | Frontend & chất lượng: Streamlit, profiling, workflow khi dữ liệu thay đổi, độ bền mô hình, load test, MkDocs |
+| Phạm Nhật Anh | 20250729E | Data: DVC pipeline, pandera, drift Evidently, drift service, DAG `monitor_drift` |
 | Bùi Trung Đức | 20251089E | Serving: FastAPI, Docker, nạp mô hình, ONNX, replay production, log I/O, `/metrics` |
