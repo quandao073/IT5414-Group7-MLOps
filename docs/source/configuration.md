@@ -45,8 +45,9 @@ Các giá trị mặc định đáng chú ý trong `configs/config.yaml`:
 
 ## Biến môi trường
 
-Danh sách đầy đủ nằm trong `.env.example`. Sao chép thành `.env`; file `.env` không được commit.
-Hợp đồng C5 trong [Hợp đồng](contracts.md#c5-bien-moi-truong) là nguồn chuẩn.
+Các biến cho máy local nằm trong `.env.example`; sao chép thành `.env` (file này không được
+commit). Bảng dưới bổ sung các biến chỉ dùng trong compose hoặc Airflow. Hợp đồng C5 trong
+[Hợp đồng](contracts.md#c5-bien-moi-truong) là nguồn chuẩn.
 
 | Biến | Mặc định | Dùng bởi |
 |---|---|---|
@@ -54,7 +55,7 @@ Hợp đồng C5 trong [Hợp đồng](contracts.md#c5-bien-moi-truong) là ngu�
 | `MODEL_BACKEND` | `joblib`; `onnx` để chạy ONNX Runtime | API |
 | `MODEL_PATH` | `models/model.joblib` | API |
 | `MODEL_CARD_PATH` | `models/model_card.json` | API |
-| `RELOAD_TOKEN` | trống — `/reload` không cần token | API, DAG retrain |
+| `RELOAD_TOKEN` | trống — `/reload` không cần token | API |
 | `API_URL` | `http://localhost:8000` | Replay, frontend, load test |
 | `MLFLOW_TRACKING_URI` | MLflow trên DagsHub; tự host: `http://localhost:5000` | Training, API |
 | `MLFLOW_TRACKING_USERNAME` | Tên tài khoản DagsHub | Training, API |

@@ -106,9 +106,8 @@ Toàn bộ hệ thống chạy local bằng Docker Desktop và `docker compose`,
 | `seaweedfs` | SeaweedFS | Artifact store MLflow, DVC remote (S3) |
 | `postgres` | PostgreSQL | Metadata Airflow/MLflow, log dự đoán |
 | `airflow-*` | Apache Airflow 3 | DAG `retrain`, `monitor_drift` |
-| `drift` | FastAPI + Evidently | Tính drift, xuất metrics drift |
-| `prometheus` | Prometheus | Thu thập metrics |
-| `grafana` | Grafana | Dashboard, cảnh báo |
+| `drift` | FastAPI + Evidently | Tính drift, xuất metrics drift; chạy `uv run invoke serve-drift` (cổng 8001), chưa nằm trong compose |
+| `prometheus`, `grafana` | Prometheus, Grafana | Dashboard, cảnh báo; cấu hình scrape trong `monitoring/`, chưa nằm trong compose |
 
 **Cài đặt môi trường phát triển** (yêu cầu [uv](https://docs.astral.sh/uv/getting-started/installation/) và Git):
 

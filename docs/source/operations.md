@@ -39,22 +39,25 @@ Nhãn `is_canceled` chỉ biết sau ngày nhận phòng, nên log dự đoán �
 uv run invoke replay --months 2017-01,2017-02 --delay 0.5
 ```
 
-Replay gửi từng booking tới `POST /predict` kèm header `X-Replay-Month: YYYY-MM`, ghi lại
-`probability`, `is_canceled`, `threshold` và nhãn thật vào bảng `prediction_logs`. Cột
-`replay_month` là khóa để drift service và báo cáo tách dữ liệu theo tháng.
+Replay gửi từng tháng tới `POST /predict/batch` kèm header `X-Replay-Month: YYYY-MM`. API ghi
+input, `probability`, `is_canceled` và `threshold` vào bảng `prediction_logs`. Sau khi gửi hết
+một tháng, replay mới mở nhãn: ghi `labels/<month>.csv` và, nếu có `DATABASE_URL`, ghi vào
+bảng `labels`. Cột `replay_month` là khóa để drift service và báo cáo tách dữ liệu theo tháng.
 
 ## Drift
 
 ### Offline
 
 `invoke drift-report` so sánh `train.csv` với từng tháng của tập test và giữa hai khách sạn
-(`Resort Hotel` và `City Hotel`), sinh `reports/drift/` gồm `drift.md` và dữ liệu chi tiết.
-Các cột lịch bị loại khỏi so sánh vì luôn khác giữa hai giai đoạn.
+(`Resort Hotel` và `City Hotel`), sinh report HTML trong `reports/drift/html/` và bảng tỉ lệ
+cột bị drift trong `reports/drift/summary.csv`. Các cột lịch bị loại khỏi so sánh vì luôn khác
+giữa hai giai đoạn. Nhận xét tổng hợp nằm ở
+[reports/drift.md](https://github.com/quandao073/IT5414-Group7-MLOps/blob/develop/reports/drift.md).
 
 ### Online
 
 Drift service (`src/hotel_booking/drift_service.py`, cổng `8001`) đọc `prediction_logs` và so
-với dữ liệu tham chiếu bằng Evidently:
+với dữ liệu tham chiếu bằng Evidently. Service chạy độc lập, **chưa nằm trong `docker compose`**:
 
 ```bash
 uv run invoke serve-drift
@@ -89,6 +92,11 @@ Airflow 3 chạy trong docker compose, giao diện tại `http://localhost:8080`
 chỉ gây huấn luyện lại tối đa một lần. DAG chỉ điều phối qua HTTP; phép tính drift nằm trong
 drift service.
 
+!!! note "DAG `retrain`"
+    Repo hiện có `airflow/dags/monitor_drift.py` và `airflow/dags/stack_health.py`.
+    `monitor_drift` trigger DAG id `retrain`; nếu DAG đó chưa có trong `airflow/dags/` thì
+    trigger không chạy. Khi cần huấn luyện lại ngay, dùng `uv run invoke retrain` bên dưới.
+
 ## Huấn luyện lại và promote
 
 ```bash
@@ -116,7 +124,12 @@ uv run invoke registry --command "demote --version 3"
 
 ## Giám sát
 
-| Thành phần | Địa chỉ | Vai trò |
+API và drift service expose `/metrics`; Prometheus và Grafana **chưa được nối vào
+`docker compose`** — `monitoring/prometheus/` và `monitoring/grafana/` hiện chỉ có file giữ chỗ.
+Khi dựng, trỏ Prometheus vào `api:8000/metrics` và `drift:8001/metrics` (hoặc
+`localhost` khi chạy ngoài compose) rồi import dashboard từ `monitoring/grafana/dashboards/`.
+
+| Thành phần | Địa chỉ khi tự dựng | Vai trò |
 |---|---|---|
 | Prometheus | `http://localhost:9090` | Thu metric từ API và drift service |
 | Grafana | `http://localhost:3000` | Dashboard và cảnh báo |
@@ -144,13 +157,13 @@ docker compose down
 |---|---|---|
 | `api` | 8000 | FastAPI + ONNX Runtime tùy `MODEL_BACKEND` |
 | `frontend` | 8501 | Streamlit, gọi `API_URL` |
-| `drift` | 8001 | Đọc `prediction_logs` từ PostgreSQL |
 | `mlflow` | 5000 | Artifact trên SeaweedFS |
 | `postgres` | 5432 | Log dự đoán, metadata Airflow/MLflow |
 | `seaweedfs` | 8333 | S3-compatible cho artifact và DVC remote `local` |
-| `airflow-*` | 8080 | API server, scheduler, triggerer |
-| `prometheus` | 9090 | |
-| `grafana` | 3000 | |
+| `airflow-apiserver`, `airflow-scheduler`, `airflow-dag-processor` | 8080 | Airflow 3, LocalExecutor |
+
+`drift`, Prometheus và Grafana không có trong compose hiện tại; drift service chạy bằng
+`uv run invoke serve-drift` như mục [Drift](#drift).
 
 Biến môi trường và giá trị mặc định xem [Cấu hình](configuration.md#bien-moi-truong) và
 [Hợp đồng](contracts.md#c11-docker-compose).
