@@ -47,7 +47,7 @@
     * `MODEL_SOURCE=mlflow` makes the API serve the `champion` of the MLflow Model Registry (`MLFLOW_TRACKING_URI`,
       contract C6); after `invoke retrain` promotes a model, `POST /reload` switches the API to it.
     * `uv run invoke export-onnx` exports `models/model.joblib` to ONNX; `MODEL_BACKEND=onnx` serves it with ONNX
-      Runtime. `uv run invoke benchmark` compares both backends.
+      Runtime. `uv run invoke benchmark` compares both backends; measured results are in `reports/serving_benchmark.md`.
     * `uv run invoke replay [--months 2017-01,2017-02] [--delay 0.5]` replays the 2017 bookings into the API.
       With `DATABASE_URL` set, the API logs every prediction and the replay writes labels to PostgreSQL.
 * Contracts between modules (API schema, model artifact, replay data, environment variables, Docker) are in
