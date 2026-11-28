@@ -178,25 +178,11 @@ Trên macOS, XGBoost và LightGBM cần OpenMP: chạy `brew install libomp` tr�
 
 Quy trình nhánh, Pull Request và quy ước commit: xem [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## 6. Kiến trúc dự kiến
+## 6. Kiến trúc
 
-```mermaid
-flowchart LR
-    A[Kaggle CSV] -->|data.py| B[(DVC remote<br/>DagsHub / SeaweedFS)]
-    B --> C[Tiền xử lý + validate schema<br/>pandera]
-    C --> D[train.py<br/>Hydra + Optuna]
-    D -->|metrics, artifacts| E[MLflow<br/>Tracking + Model Registry]
-    E -->|alias: champion| F[FastAPI + ONNX Runtime<br/>Docker]
-    F --> G[Streamlit frontend]
-    F -->|log input/output| P[(PostgreSQL)]
-    P --> H[Drift service<br/>Evidently]
-    F -->|/metrics| I[Prometheus]
-    H -->|drift metrics| I
-    I --> K[Grafana<br/>dashboard + alert]
-    L[Airflow 3<br/>retrain · monitor_drift] -->|kiểm tra drift| H
-    L -->|retrain theo lịch / khi drift| D
-    J[GitHub Actions<br/>lint · test · build] -.-> F
-```
+![Kiến trúc MLOps](reports/figures/architecture.png)
+
+Bản sửa được: [reports/figures/architecture.excalidraw](reports/figures/architecture.excalidraw) (mở bằng [excalidraw.com](https://excalidraw.com), *Open*). Cổng, URL nội bộ và biến môi trường của từng service: mục C11 trong [docs/source/contracts.md](docs/source/contracts.md).
 
 **Vòng huấn luyện lại:** DAG `retrain` được kích hoạt theo lịch (chu kỳ cấu hình được) hoặc bởi DAG `monitor_drift` khi tỉ lệ cột bị drift vượt ngưỡng. Mỗi lần chạy: lấy dữ liệu đã có nhãn → kiểm tra schema → huấn luyện → đăng ký mô hình với alias `challenger` → so sánh với `champion` trên tháng có nhãn gần nhất → promote nếu tốt hơn → API nạp lại `champion`.
 
